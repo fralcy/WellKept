@@ -44,8 +44,10 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Generated code — never edited by hand, regenerate via build_runner
+# Generated code — never edited by hand, regenerate via build_runner/gen-l10n
 *.g.dart
+untranslated.txt
+lib/core/l10n/app_localizations*.dart
 
 # Personal design notes — kept locally, not part of the repo
 WELLKEPT_APP_NOTES.md

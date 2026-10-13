@@ -2,21 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../models/tracked_item.dart';
+import '../l10n/app_localizations.dart';
 import '../models/due_status.dart';
 
-// Hard-coded Vietnamese display text for this milestone — moves into ARB
-// files once the UI settles (see the l10n note in main.dart).
+// Display helpers shared by the UI and NotificationProvider — every one
+// takes the AppLocalizations to render in, so the same code serves both
+// a widget's `AppLocalizations.of(context)` and a non-widget
+// `lookupAppLocalizations(locale)`.
 
-String categoryLabel(ItemCategory c) {
+String categoryLabel(AppLocalizations l10n, ItemCategory c) {
   switch (c) {
     case ItemCategory.vehicle:
-      return 'Xe cộ';
+      return l10n.categoryVehicle;
     case ItemCategory.home:
-      return 'Đồ gia dụng';
+      return l10n.categoryHome;
     case ItemCategory.warranty:
-      return 'Bảo hành / hóa đơn';
+      return l10n.categoryWarranty;
     case ItemCategory.other:
-      return 'Khác';
+      return l10n.categoryOther;
   }
 }
 
@@ -33,59 +36,66 @@ IconData categoryIcon(ItemCategory c) {
   }
 }
 
-String recurrenceLabel(RecurrenceType r) {
+String recurrenceLabel(AppLocalizations l10n, RecurrenceType r) {
   switch (r) {
     case RecurrenceType.byTime:
-      return 'Định kỳ theo thời gian';
+      return l10n.recurrenceByTime;
     case RecurrenceType.byValue:
-      return 'Định kỳ theo chỉ số (km...)';
+      return l10n.recurrenceByValue;
     case RecurrenceType.once:
-      return 'Một lần (hết hạn bảo hành)';
+      return l10n.recurrenceOnce;
     case RecurrenceType.none:
-      return 'Không nhắc';
+      return l10n.recurrenceNone;
   }
 }
 
-final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
+/// "05/03/2026" in Vietnamese, "Mar 5, 2026" in English (where a numeric
+/// date would be ambiguous between US and day-first readers). Both use
+/// en_US — the only date-symbol data intl ships pre-initialized — so this
+/// also works outside the widget tree (e.g. notification text), before or
+/// without flutter_localizations loading any other locale's data.
+String formatDate(AppLocalizations l10n, DateTime d) =>
+    l10n.localeName.startsWith('vi')
+    ? DateFormat('dd/MM/yyyy', 'en_US').format(d)
+    : DateFormat.yMMMd('en_US').format(d);
 
-/// Vietnamese grouping/decimal separators ("1.500,5"), at most one decimal.
-final NumberFormat _valueFormat = NumberFormat('#,##0.#', 'vi');
-
-String formatDate(DateTime d) => _dateFormat.format(d);
-
-String formatValue(double v) => _valueFormat.format(v);
+/// Locale grouping/decimal separators ("1.500,5" / "1,500.5"), at most one
+/// decimal.
+String formatValue(AppLocalizations l10n, double v) =>
+    NumberFormat('#,##0.#', l10n.localeName).format(v);
 
 /// One-line "how far to the next due point" summary for the item list.
-String dueSummary(DueStatus s, TrackedItem item) {
+String dueSummary(AppLocalizations l10n, DueStatus s, TrackedItem item) {
   switch (s.type) {
     case RecurrenceType.byTime:
     case RecurrenceType.once:
       final days = s.daysRemaining;
-      if (days == null) return 'Chưa đủ thông tin để tính mốc';
-      final verb = s.type == RecurrenceType.once ? 'Hết hạn' : 'Tới hạn';
-      if (days < 0) return 'Quá hạn ${-days} ngày';
-      if (days == 0) return '$verb hôm nay';
-      return 'Còn $days ngày (${formatDate(s.nextDueDate!)})';
+      if (days == null) return l10n.dueMissingInfo;
+      if (days < 0) return l10n.dueOverdueDays(-days);
+      if (days == 0) {
+        return s.type == RecurrenceType.once
+            ? l10n.expiresToday
+            : l10n.dueToday;
+      }
+      return l10n.dueInDays(days, formatDate(l10n, s.nextDueDate!));
     case RecurrenceType.byValue:
       final remaining = s.remainingValue;
-      if (remaining == null) return 'Chưa có chỉ số để tính mốc';
+      if (remaining == null) return l10n.dueMissingReading;
       final unit = item.valueUnit;
+      final target = formatValue(l10n, s.nextDueValue!);
       if (remaining < 0) {
-        return 'Quá mốc ${formatValue(-remaining)} $unit';
+        return l10n.dueOverValue(formatValue(l10n, -remaining), unit);
       }
-      if (remaining == 0) {
-        return 'Tới mốc ${formatValue(s.nextDueValue!)} $unit';
-      }
-      return 'Còn ${formatValue(remaining)} $unit '
-          '(mốc ${formatValue(s.nextDueValue!)} $unit)';
+      if (remaining == 0) return l10n.dueAtValue(target, unit);
+      return l10n.dueInValue(formatValue(l10n, remaining), target, unit);
     case RecurrenceType.none:
-      return 'Không đặt mốc nhắc';
+      return l10n.dueNone;
   }
 }
 
 /// Warning shown under [dueSummary] when a `byValue` reading is stale, or
 /// null when there's nothing to warn about.
-String? staleReadingWarning(DueStatus s) {
+String? staleReadingWarning(AppLocalizations l10n, DueStatus s) {
   if (!s.isReadingStale) return null;
-  return '${s.daysSinceReading} ngày chưa cập nhật chỉ số';
+  return l10n.staleReading(s.daysSinceReading!);
 }

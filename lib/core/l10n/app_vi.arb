@@ -1,0 +1,128 @@
+{
+  "@@locale": "vi",
+
+  "appTitle": "WellKept",
+  "save": "Lưu",
+  "cancel": "Hủy",
+  "delete": "Xóa",
+  "saveFailed": "Không lưu được: {error}",
+  "@saveFailed": { "placeholders": { "error": { "type": "String" } } },
+  "pickDate": "Chọn ngày",
+
+  "addItem": "Thêm món đồ",
+  "editItem": "Sửa món đồ",
+  "emptyList": "Chưa có món đồ nào.\nBấm \"Thêm món đồ\" để bắt đầu theo dõi.",
+  "moreOptions": "Tùy chọn",
+  "menuLog": "Ghi bảo trì",
+  "menuUpdateReading": "Cập nhật chỉ số",
+  "menuEdit": "Sửa",
+  "deleteItemTitle": "Xóa \"{name}\"?",
+  "@deleteItemTitle": { "placeholders": { "name": { "type": "String" } } },
+  "deleteItemBody": "Toàn bộ lịch sử bảo trì của món đồ cũng bị xóa.",
+
+  "itemName": "Tên món đồ",
+  "itemNameRequired": "Nhập tên món đồ",
+  "category": "Loại",
+  "recurrence": "Cách tính mốc",
+  "lastServiceOrStart": "Lần bảo trì gần nhất / ngày bắt đầu tính",
+  "purchaseDate": "Ngày mua",
+  "reminderLeadDays": "Báo trước (ngày)",
+  "itemNotes": "Ghi chú (mã phụ tùng, SĐT tiệm...)",
+  "intervalDays": "Chu kỳ (ngày)",
+  "intervalDaysHelper": "Ví dụ 180 = khoảng 6 tháng",
+  "intervalDaysInvalid": "Nhập số ngày lớn hơn 0",
+  "intervalValue": "Chu kỳ",
+  "positiveNumberRequired": "Nhập số lớn hơn 0",
+  "valueUnit": "Đơn vị",
+  "currentReading": "Chỉ số hiện tại",
+  "readingAtLastService": "Chỉ số lúc bảo trì gần nhất",
+  "readingAtLastServiceHelper": "Ví dụ số km trên đồng hồ khi thay dầu lần trước",
+  "readingRequired": "Nhập chỉ số hiện tại",
+  "expiryDate": "Ngày hết hạn bảo hành",
+  "expiryDateRequired": "Chọn ngày hết hạn",
+
+  "categoryVehicle": "Xe cộ",
+  "categoryHome": "Đồ gia dụng",
+  "categoryWarranty": "Bảo hành / hóa đơn",
+  "categoryOther": "Khác",
+  "recurrenceByTime": "Định kỳ theo thời gian",
+  "recurrenceByValue": "Định kỳ theo chỉ số (km...)",
+  "recurrenceOnce": "Một lần (hết hạn bảo hành)",
+  "recurrenceNone": "Không nhắc",
+
+  "dueMissingInfo": "Chưa đủ thông tin để tính mốc",
+  "dueOverdueDays": "Quá hạn {days} ngày",
+  "@dueOverdueDays": { "placeholders": { "days": { "type": "int" } } },
+  "dueToday": "Tới hạn hôm nay",
+  "expiresToday": "Hết hạn hôm nay",
+  "dueInDays": "Còn {days} ngày ({date})",
+  "@dueInDays": {
+    "placeholders": { "days": { "type": "int" }, "date": { "type": "String" } }
+  },
+  "dueMissingReading": "Chưa có chỉ số để tính mốc",
+  "dueOverValue": "Quá mốc {amount} {unit}",
+  "@dueOverValue": {
+    "placeholders": { "amount": { "type": "String" }, "unit": { "type": "String" } }
+  },
+  "dueAtValue": "Tới mốc {target} {unit}",
+  "@dueAtValue": {
+    "placeholders": { "target": { "type": "String" }, "unit": { "type": "String" } }
+  },
+  "dueInValue": "Còn {amount} {unit} (mốc {target} {unit})",
+  "@dueInValue": {
+    "placeholders": {
+      "amount": { "type": "String" },
+      "target": { "type": "String" },
+      "unit": { "type": "String" }
+    }
+  },
+  "dueNone": "Không đặt mốc nhắc",
+  "staleReading": "{days} ngày chưa cập nhật chỉ số",
+  "@staleReading": { "placeholders": { "days": { "type": "int" } } },
+
+  "logTitle": "Ghi bảo trì: {name}",
+  "@logTitle": { "placeholders": { "name": { "type": "String" } } },
+  "logDate": "Ngày bảo trì",
+  "logReading": "Chỉ số lúc bảo trì ({unit})",
+  "@logReading": { "placeholders": { "unit": { "type": "String" } } },
+  "logNote": "Ghi chú",
+  "logHistory": "Lịch sử bảo trì",
+  "deleteLog": "Xóa log",
+
+  "updateReadingTitle": "Cập nhật chỉ số: {name}",
+  "@updateReadingTitle": { "placeholders": { "name": { "type": "String" } } },
+  "storedReading": "Chỉ số đang lưu: {value} {unit}",
+  "@storedReading": {
+    "placeholders": { "value": { "type": "String" }, "unit": { "type": "String" } }
+  },
+  "currentReadingWithUnit": "Chỉ số hiện tại ({unit})",
+  "@currentReadingWithUnit": { "placeholders": { "unit": { "type": "String" } } },
+
+  "photo": "Ảnh",
+  "addPhoto": "Thêm ảnh",
+  "takePhoto": "Chụp ảnh",
+  "pickPhoto": "Chọn từ thư viện",
+  "removePhoto": "Xóa ảnh",
+  "photoFailed": "Không lấy được ảnh: {error}",
+  "@photoFailed": { "placeholders": { "error": { "type": "String" } } },
+
+  "settings": "Cài đặt",
+  "language": "Ngôn ngữ",
+  "theme": "Giao diện",
+  "reminderTime": "Giờ nhắc",
+  "reminderTimeHelper": "Thông báo nhắc mốc theo ngày và hạn bảo hành được gửi vào giờ này.",
+  "remindersWebNote": "Bản web không gửi được thông báo khi đã đóng trang — hãy dùng app trên điện thoại để nhận nhắc nhở.",
+
+  "notificationChannelName": "Nhắc mốc bảo trì",
+  "notificationChannelDescription": "Nhắc khi món đồ sắp tới hạn bảo trì hoặc hết bảo hành",
+  "notifDueInDays": "Còn {days} ngày tới hạn bảo trì ({date})",
+  "@notifDueInDays": {
+    "placeholders": { "days": { "type": "int" }, "date": { "type": "String" } }
+  },
+  "notifDueToday": "Hôm nay tới hạn bảo trì",
+  "notifExpiresInDays": "Còn {days} ngày hết bảo hành ({date})",
+  "@notifExpiresInDays": {
+    "placeholders": { "days": { "type": "int" }, "date": { "type": "String" } }
+  },
+  "notifExpiresToday": "Hôm nay hết hạn bảo hành"
+}
