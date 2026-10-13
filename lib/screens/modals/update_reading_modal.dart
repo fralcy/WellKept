@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/tracked_item_provider.dart';
 import '../../core/utils/item_labels.dart';
@@ -38,7 +39,7 @@ class _UpdateReadingFormState extends State<_UpdateReadingForm> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _save(AppLocalizations l10n) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
@@ -52,13 +53,14 @@ class _UpdateReadingFormState extends State<_UpdateReadingForm> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Không lưu được: $e')));
+      ).showSnackBar(SnackBar(content: Text(l10n.saveFailed('$e'))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
+    final l10n = AppLocalizations.of(context)!;
     final item = widget.item;
     final current = item.currentValue;
 
@@ -69,7 +71,7 @@ class _UpdateReadingFormState extends State<_UpdateReadingForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Cập nhật chỉ số: ${item.name}',
+            l10n.updateReadingTitle(item.name),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -79,7 +81,7 @@ class _UpdateReadingFormState extends State<_UpdateReadingForm> {
           if (current != null) ...[
             const SizedBox(height: 4),
             Text(
-              'Chỉ số đang lưu: ${formatValue(current)} ${item.valueUnit}',
+              l10n.storedReading(formatValue(l10n, current), item.valueUnit),
               style: TextStyle(color: t.textSecondary),
             ),
           ],
@@ -88,20 +90,20 @@ class _UpdateReadingFormState extends State<_UpdateReadingForm> {
             controller: _valueController,
             autofocus: true,
             decoration: InputDecoration(
-              labelText: 'Chỉ số hiện tại (${item.valueUnit})',
+              labelText: l10n.currentReadingWithUnit(item.valueUnit),
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             validator: (v) =>
-                _parseDouble(v) == null ? 'Nhập chỉ số hiện tại' : null,
-            onFieldSubmitted: (_) => _save(),
+                _parseDouble(v) == null ? l10n.readingRequired : null,
+            onFieldSubmitted: (_) => _save(l10n),
           ),
           const SizedBox(height: 16),
           Align(
             alignment: Alignment.centerRight,
             child: NeumorphicButton(
-              onTap: _save,
+              onTap: () => _save(l10n),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: const Text('Lưu'),
+              child: Text(l10n.save),
             ),
           ),
         ],

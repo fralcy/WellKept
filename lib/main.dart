@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
+import 'core/l10n/app_localizations.dart';
+import 'core/providers/notification_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/tracked_item_provider.dart';
 import 'core/utils/data_manager.dart';
+import 'core/utils/notification_service_base.dart';
+import 'core/utils/photo_picker_service.dart';
 import 'screens/responsive_item_list_screen.dart';
 
 void main() async {
@@ -22,14 +25,38 @@ void main() async {
 }
 
 class WellKeptApp extends StatelessWidget {
-  const WellKeptApp({super.key});
+  const WellKeptApp({
+    super.key,
+    this.notificationService,
+    this.photoPicker = const PhotoPickerService(),
+  });
+
+  /// Overridable for tests; defaults to the platform implementation.
+  final NotificationServiceBase? notificationService;
+  final PhotoPickerService photoPicker;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<PhotoPickerService>.value(value: photoPicker),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => TrackedItemProvider()),
+        ChangeNotifierProvider(
+          // Depends on the two providers above — read once here, the same
+          // wiring pattern as DualCal's NotificationProvider.
+          create: (context) {
+            final provider = NotificationProvider(
+              itemProvider: context.read<TrackedItemProvider>(),
+              settingsProvider: context.read<SettingsProvider>(),
+              notificationService: notificationService,
+            );
+            provider.init();
+            return provider;
+          },
+          // Nothing watches it, so without this it would never be created.
+          lazy: false,
+        ),
       ],
       child: const _ThemedApp(),
     );
@@ -67,12 +94,9 @@ class _ThemedApp extends StatelessWidget {
         // of overriding every widget that uses bodySmall/labelSmall.
         textTheme: _withMinFontSize(baseTheme.textTheme, 13),
       ),
-      // UI text is hard-coded Vietnamese this milestone (ARB l10n comes
-      // later); these delegates still localize Material widgets such as
-      // the date picker.
       locale: Locale(settings.languageCode),
-      localizationsDelegates: GlobalMaterialLocalizations.delegates,
-      supportedLocales: const [Locale('vi'), Locale('en')],
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: const ResponsiveItemListScreen(),
     );
   }

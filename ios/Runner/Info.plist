@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Well Kept</string>
+	<string>WellKept</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Chụp ảnh món đồ, hóa đơn hoặc phiếu bảo hành để lưu cùng món đồ.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Chọn ảnh món đồ, hóa đơn hoặc phiếu bảo hành từ thư viện.</string>
 </dict>
 </plist>

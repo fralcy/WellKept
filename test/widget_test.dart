@@ -7,9 +7,23 @@ import 'package:provider/provider.dart';
 import 'package:well_kept/core/providers/settings_provider.dart';
 import 'package:well_kept/core/providers/tracked_item_provider.dart';
 import 'package:well_kept/core/utils/data_manager.dart';
+import 'package:well_kept/core/utils/photo_picker_service.dart';
+import 'package:well_kept/core/widgets/item_photo.dart';
 import 'package:well_kept/main.dart';
 import 'package:well_kept/models/tracked_item.dart';
 import 'package:well_kept/screens/responsive_item_list_screen.dart';
+
+import 'fakes.dart';
+
+/// The app with fakes for the platform plugins (notifications, photo
+/// picker), which have no implementation under `flutter test`.
+Widget _app({
+  FakePhotoPicker? picker,
+  FakeNotificationService? notifications,
+}) => WellKeptApp(
+  photoPicker: picker ?? FakePhotoPicker(),
+  notificationService: notifications ?? FakeNotificationService(),
+);
 
 TrackedItemProvider _itemProvider(WidgetTester tester) => tester
     .element(find.byType(ResponsiveItemListScreen))
@@ -81,7 +95,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _resetData(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     expect(find.text('WellKept'), findsOneWidget);
@@ -92,7 +106,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _resetData(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     // runAsync: addItem does real Hive file I/O, which never resolves in
@@ -117,7 +131,7 @@ void main() {
   ) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(FloatingActionButton));
@@ -142,7 +156,7 @@ void main() {
   ) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(FloatingActionButton));
@@ -158,7 +172,7 @@ void main() {
       'date, which is then required', (WidgetTester tester) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(FloatingActionButton));
@@ -186,7 +200,7 @@ void main() {
       'remaining km in the list', (WidgetTester tester) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     await tester.runAsync(() async {
@@ -230,7 +244,7 @@ void main() {
   ) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await _itemProvider(tester).addItem(
@@ -273,7 +287,7 @@ void main() {
   ) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await _itemProvider(tester).addItem(
@@ -308,7 +322,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await _resetData(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     final longAgo = DateTime.now().subtract(const Duration(days: 60));
@@ -337,7 +351,7 @@ void main() {
   ) async {
     await _resetData(tester);
     await _usePhoneSize(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await _itemProvider(tester).addItem(name: 'Nồi cơm');
@@ -363,16 +377,18 @@ void main() {
     expect(find.textContaining('Chưa có món đồ nào'), findsOneWidget);
   });
 
-  testWidgets('the theme menu switches and persists the theme', (
+  testWidgets('the settings sheet switches and persists the theme', (
     WidgetTester tester,
   ) async {
     await _resetData(tester);
-    await tester.pumpWidget(const WellKeptApp());
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.palette_outlined));
+    await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
-    await _tapWithIO(tester, find.text('Slate'));
+    expect(find.text('Cài đặt'), findsOneWidget);
+    await _tapWithIO(tester, find.byTooltip('Slate'));
 
     final settings = tester
         .element(find.byType(ResponsiveItemListScreen))
@@ -388,12 +404,166 @@ void main() {
     );
   });
 
+  testWidgets('switching the language to English re-renders the whole UI', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await _itemProvider(tester).addItem(
+        name: 'Air filter',
+        recurrenceType: RecurrenceType.byTime,
+        recurrenceIntervalDays: 90,
+        purchaseDate: DateTime.now(),
+      );
+    });
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Còn 90 ngày'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    await _tapWithIO(tester, find.text('English'));
+
+    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Reminder time'), findsOneWidget);
+    expect(DataManager().settings.languageCode, 'en');
+
+    Navigator.of(tester.element(find.text('Settings'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.text('Add item'), findsOneWidget);
+    expect(find.textContaining('90 days left'), findsOneWidget);
+  });
+
+  testWidgets('the settings sheet shows and persists the reminder time', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    // Vietnamese time format is 24h.
+    expect(find.text('08:00'), findsOneWidget);
+
+    // The time picker's own flow is Flutter's; drive the provider the
+    // sheet calls once a time is picked, and check the sheet follows.
+    final settings = tester
+        .element(find.byType(ResponsiveItemListScreen))
+        .read<SettingsProvider>();
+    await tester.runAsync(() => settings.setReminderTime(19, 30));
+    await tester.pumpAndSettle();
+
+    expect(find.text('19:30'), findsOneWidget);
+    expect(DataManager().settings.reminderHour, 19);
+    expect(DataManager().settings.reminderMinute, 30);
+  });
+
+  testWidgets('adding an item with a due date schedules its reminders', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    final notifications = FakeNotificationService();
+    await tester.pumpWidget(_app(notifications: notifications));
+    await tester.pumpAndSettle();
+    expect(notifications.initCalls, 1);
+    expect(notifications.scheduled, isEmpty);
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Tên món đồ'),
+      'Máy lạnh',
+    );
+    await _tapSave(tester);
+    // The reschedule the save triggers hops between the real zone (where
+    // the save ran) and the fake one (where NotificationProvider's queue
+    // was created): alternate real time and pumps until it has finished.
+    for (var i = 0; i < 3; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+
+    // 180-day interval from today, 7 days' notice: one lead reminder and
+    // one on the due day, titled with the item name.
+    expect(notifications.scheduled, hasLength(2));
+    expect(notifications.scheduled.map((r) => r.title).toSet(), {'Máy lạnh'});
+    expect(notifications.permissionRequests, 1);
+  });
+
+  testWidgets('a photo picked in the add form is saved with the item', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    final picker = FakePhotoPicker();
+    await tester.pumpWidget(_app(picker: picker));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chọn từ thư viện'));
+    await tester.pumpAndSettle();
+
+    expect(picker.requests, [PhotoSource.gallery]);
+    expect(find.text('Xóa ảnh'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Tên món đồ'),
+      'Hóa đơn tủ lạnh',
+    );
+    await tester.ensureVisible(find.text('Lưu'));
+    // Like _tapWithIO, but the rebuild that creates the card's ItemPhoto
+    // (which reads the photo from Hive) must also run in the real zone.
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Lưu'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+
+    final item = _itemProvider(tester).items.single;
+    expect(item.photoId, isNotNull);
+    final stored = await tester.runAsync(
+      () => _itemProvider(tester).loadPhoto(item.photoId!),
+    );
+    expect(stored, onePixelPng);
+    expect(find.byType(ItemPhoto), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(ItemPhoto), matching: find.byType(Image)),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a cancelled photo pick changes nothing', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app(picker: FakePhotoPicker(cancels: true)));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Chụp ảnh'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Xóa ảnh'), findsNothing);
+  });
+
   testWidgets('on a desktop-sized screen the add-item form opens as a dialog', (
     WidgetTester tester,
   ) async {
     await _resetData(tester);
     await _useSize(tester, const Size(1280, 900));
-    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
     await tester.tap(find.byType(FloatingActionButton));

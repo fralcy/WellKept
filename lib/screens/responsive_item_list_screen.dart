@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/constants/neumorphic_themes.dart';
+import '../core/l10n/app_localizations.dart';
 import '../core/models/due_status.dart';
 import '../core/providers/settings_provider.dart';
 import '../core/providers/tracked_item_provider.dart';
 import '../core/utils/item_labels.dart';
+import '../core/widgets/item_photo.dart';
 import '../core/widgets/neumorphic_container.dart';
 import '../models/tracked_item.dart';
 import 'modals/add_item_modal.dart';
 import 'modals/add_log_modal.dart';
+import 'modals/settings_modal.dart';
 import 'modals/update_reading_modal.dart';
 import 'responsive_screen.dart';
 
@@ -21,18 +23,25 @@ class ResponsiveItemListScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
         backgroundColor: t.background,
         foregroundColor: t.textPrimary,
-        title: const Text('WellKept'),
-        actions: const [_ThemeMenu()],
+        title: Text(l10n.appTitle),
+        actions: [
+          IconButton(
+            tooltip: l10n.settings,
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => showSettingsModal(context),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showAddItemModal(context),
         icon: const Icon(Icons.add),
-        label: const Text('Thêm món đồ'),
+        label: Text(l10n.addItem),
       ),
       body: ResponsiveScreen(
         mobileBuilder: (_) => const _ItemList(),
@@ -54,6 +63,7 @@ class _ItemList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
+    final l10n = AppLocalizations.of(context)!;
     final provider = context.watch<TrackedItemProvider>();
     final items = provider.itemsByUrgency();
 
@@ -62,7 +72,7 @@ class _ItemList extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            'Chưa có món đồ nào.\nBấm "Thêm món đồ" để bắt đầu theo dõi.',
+            l10n.emptyList,
             textAlign: TextAlign.center,
             style: TextStyle(color: t.textSecondary),
           ),
@@ -90,22 +100,30 @@ class _ItemCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
+    final l10n = AppLocalizations.of(context)!;
     final scheme = Theme.of(context).colorScheme;
     final dueColor = status.isOverdue
         ? scheme.error
         : status.isDueSoon
         ? t.accent
         : t.textSecondary;
-    final staleWarning = staleReadingWarning(status);
+    final staleWarning = staleReadingWarning(l10n, status);
+    final icon = SizedBox.square(
+      dimension: 48,
+      child: Icon(categoryIcon(item.category), color: t.accent),
+    );
 
     return GestureDetector(
       onTap: () => showAddLogModal(context, item),
       child: NeumorphicContainer(
-        padding: const EdgeInsets.fromLTRB(16, 12, 4, 12),
+        padding: const EdgeInsets.fromLTRB(12, 12, 4, 12),
         child: Row(
           children: [
-            Icon(categoryIcon(item.category), color: t.accent),
-            const SizedBox(width: 14),
+            if (item.photoId != null)
+              ItemPhoto(photoId: item.photoId!, size: 48, placeholder: icon)
+            else
+              icon,
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -120,7 +138,7 @@ class _ItemCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    dueSummary(status, item),
+                    dueSummary(l10n, status, item),
                     style: TextStyle(
                       color: dueColor,
                       fontWeight: status.isDueSoon
@@ -150,7 +168,7 @@ class _ItemCard extends StatelessWidget {
               ),
             ),
             PopupMenuButton<_ItemAction>(
-              tooltip: 'Tùy chọn',
+              tooltip: l10n.moreOptions,
               icon: Icon(Icons.more_vert, color: t.textSecondary),
               onSelected: (action) {
                 switch (action) {
@@ -161,26 +179,26 @@ class _ItemCard extends StatelessWidget {
                   case _ItemAction.edit:
                     showEditItemModal(context, item);
                   case _ItemAction.delete:
-                    _confirmDelete(context);
+                    _confirmDelete(context, l10n);
                 }
               },
               itemBuilder: (_) => [
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _ItemAction.log,
-                  child: Text('Ghi bảo trì'),
+                  child: Text(l10n.menuLog),
                 ),
                 if (item.recurrenceType == RecurrenceType.byValue)
-                  const PopupMenuItem(
+                  PopupMenuItem(
                     value: _ItemAction.reading,
-                    child: Text('Cập nhật chỉ số'),
+                    child: Text(l10n.menuUpdateReading),
                   ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _ItemAction.edit,
-                  child: Text('Sửa'),
+                  child: Text(l10n.menuEdit),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: _ItemAction.delete,
-                  child: Text('Xóa'),
+                  child: Text(l10n.delete),
                 ),
               ],
             ),
@@ -190,17 +208,17 @@ class _ItemCard extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context) {
+  Future<void> _confirmDelete(BuildContext context, AppLocalizations l10n) {
     final provider = context.read<TrackedItemProvider>();
     return showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Xóa "${item.name}"?'),
-        content: const Text('Toàn bộ lịch sử bảo trì của món đồ cũng bị xóa.'),
+        title: Text(l10n.deleteItemTitle(item.name)),
+        content: Text(l10n.deleteItemBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Hủy'),
+            child: Text(l10n.cancel),
           ),
           TextButton(
             // Deletes straight from the button handler rather than after
@@ -210,7 +228,7 @@ class _ItemCard extends StatelessWidget {
               Navigator.of(context).pop();
               provider.deleteItem(item.id);
             },
-            child: const Text('Xóa'),
+            child: Text(l10n.delete),
           ),
         ],
       ),
@@ -219,34 +237,3 @@ class _ItemCard extends StatelessWidget {
 }
 
 enum _ItemAction { log, reading, edit, delete }
-
-class _ThemeMenu extends StatelessWidget {
-  const _ThemeMenu();
-
-  @override
-  Widget build(BuildContext context) {
-    final settings = context.watch<SettingsProvider>();
-    return PopupMenuButton<String>(
-      tooltip: 'Đổi giao diện',
-      icon: const Icon(Icons.palette_outlined),
-      initialValue: settings.themeId,
-      itemBuilder: (_) => [
-        for (final NeumorphicThemeConfig theme in neumorphicThemePresets)
-          PopupMenuItem(
-            value: theme.id,
-            // onTap (called directly on tap) rather than the button's
-            // onSelected (called after the menu's future completes) — see
-            // _ItemCard._confirmDelete for why.
-            onTap: () => settings.setThemeId(theme.id),
-            child: Row(
-              children: [
-                CircleAvatar(radius: 8, backgroundColor: theme.accent),
-                const SizedBox(width: 10),
-                Text(theme.label),
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-}

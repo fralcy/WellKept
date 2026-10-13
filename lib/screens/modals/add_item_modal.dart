@@ -1,10 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/tracked_item_provider.dart';
 import '../../core/utils/item_labels.dart';
+import '../../core/utils/photo_picker_service.dart';
+import '../../core/widgets/item_photo.dart';
 import '../../core/widgets/neumorphic_button.dart';
 import '../../models/tracked_item.dart';
 import 'adaptive_modal.dart';
@@ -44,6 +48,11 @@ class _ItemFormState extends State<_ItemForm> {
   DateTime _startDate = DateTime.now();
   DateTime? _expiryDate;
   bool _saving = false;
+
+  /// Photo picked in this form session; with [_photoChanged] false the
+  /// item's stored photo (if any) is shown and kept untouched.
+  Uint8List? _photoBytes;
+  bool _photoChanged = false;
 
   bool get _isEditing => widget.item != null;
 
@@ -94,7 +103,28 @@ class _ItemFormState extends State<_ItemForm> {
     );
   }
 
-  Future<void> _save() async {
+  Future<void> _pickPhoto(AppLocalizations l10n, PhotoSource source) async {
+    try {
+      final bytes = await context.read<PhotoPickerService>().pick(source);
+      if (bytes == null || !mounted) return;
+      setState(() {
+        _photoBytes = bytes;
+        _photoChanged = true;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.photoFailed('$e'))));
+    }
+  }
+
+  void _removePhoto() => setState(() {
+    _photoBytes = null;
+    _photoChanged = true;
+  });
+
+  Future<void> _save(AppLocalizations l10n) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
@@ -120,8 +150,9 @@ class _ItemFormState extends State<_ItemForm> {
     try {
       final provider = context.read<TrackedItemProvider>();
       final original = widget.item;
+      final String itemId;
       if (original == null) {
-        await provider.addItem(
+        final created = await provider.addItem(
           name: name,
           category: _category,
           purchaseDate: _startDate,
@@ -134,6 +165,7 @@ class _ItemFormState extends State<_ItemForm> {
           notes: notes,
           valueUnit: unit,
         );
+        itemId = created.id;
       } else {
         final readingChanged = currentValue != original.currentValue;
         await provider.updateItem(
@@ -162,20 +194,23 @@ class _ItemFormState extends State<_ItemForm> {
                 : null,
           ),
         );
+        itemId = original.id;
       }
+      if (_photoChanged) await provider.setItemPhoto(itemId, _photoBytes);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Không lưu được: $e')));
+      ).showSnackBar(SnackBar(content: Text(l10n.saveFailed('$e'))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
+    final l10n = AppLocalizations.of(context)!;
 
     return Form(
       key: _formKey,
@@ -184,7 +219,7 @@ class _ItemFormState extends State<_ItemForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            _isEditing ? 'Sửa món đồ' : 'Thêm món đồ',
+            _isEditing ? l10n.editItem : l10n.addItem,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -192,21 +227,23 @@ class _ItemFormState extends State<_ItemForm> {
             ),
           ),
           const SizedBox(height: 12),
+          _photoSection(l10n),
+          const SizedBox(height: 12),
           TextFormField(
             controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Tên món đồ'),
+            decoration: InputDecoration(labelText: l10n.itemName),
             textInputAction: TextInputAction.next,
             validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Nhập tên món đồ' : null,
+                (v == null || v.trim().isEmpty) ? l10n.itemNameRequired : null,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<ItemCategory>(
             initialValue: _category,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Loại'),
+            decoration: InputDecoration(labelText: l10n.category),
             items: [
               for (final c in ItemCategory.values)
-                DropdownMenuItem(value: c, child: Text(categoryLabel(c))),
+                DropdownMenuItem(value: c, child: Text(categoryLabel(l10n, c))),
             ],
             onChanged: (c) => setState(() {
               _category = c!;
@@ -221,20 +258,23 @@ class _ItemFormState extends State<_ItemForm> {
             key: ValueKey(_recurrence),
             initialValue: _recurrence,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Cách tính mốc'),
+            decoration: InputDecoration(labelText: l10n.recurrence),
             items: [
               for (final r in RecurrenceType.values)
-                DropdownMenuItem(value: r, child: Text(recurrenceLabel(r))),
+                DropdownMenuItem(
+                  value: r,
+                  child: Text(recurrenceLabel(l10n, r)),
+                ),
             ],
             onChanged: (r) => setState(() => _recurrence = r!),
           ),
           const SizedBox(height: 12),
-          ..._recurrenceFields(),
+          ..._recurrenceFields(l10n),
           const SizedBox(height: 12),
           _DateField(
             label: _recurrence == RecurrenceType.byTime
-                ? 'Lần bảo trì gần nhất / ngày bắt đầu tính'
-                : 'Ngày mua',
+                ? l10n.lastServiceOrStart
+                : l10n.purchaseDate,
             value: _startDate,
             onTap: () async {
               final picked = await _pickDate(_startDate);
@@ -246,7 +286,7 @@ class _ItemFormState extends State<_ItemForm> {
             const SizedBox(height: 12),
             TextFormField(
               controller: _leadDaysController,
-              decoration: const InputDecoration(labelText: 'Báo trước (ngày)'),
+              decoration: InputDecoration(labelText: l10n.reminderLeadDays),
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             ),
@@ -254,9 +294,7 @@ class _ItemFormState extends State<_ItemForm> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _notesController,
-            decoration: const InputDecoration(
-              labelText: 'Ghi chú (mã phụ tùng, SĐT tiệm...)',
-            ),
+            decoration: InputDecoration(labelText: l10n.itemNotes),
             minLines: 1,
             maxLines: 4,
           ),
@@ -264,9 +302,9 @@ class _ItemFormState extends State<_ItemForm> {
           Align(
             alignment: Alignment.centerRight,
             child: NeumorphicButton(
-              onTap: _save,
+              onTap: () => _save(l10n),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: const Text('Lưu'),
+              child: Text(l10n.save),
             ),
           ),
         ],
@@ -274,20 +312,95 @@ class _ItemFormState extends State<_ItemForm> {
     );
   }
 
-  List<Widget> _recurrenceFields() {
+  Widget _photoSection(AppLocalizations l10n) {
+    final t = context.watch<SettingsProvider>().themeConfig;
+    const size = 72.0;
+    final placeholder = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: t.darkShadow),
+      ),
+      child: Icon(Icons.image_outlined, color: t.textSecondary),
+    );
+    final storedPhotoId = widget.item?.photoId;
+
+    final Widget preview;
+    final bool hasPhoto;
+    if (_photoChanged) {
+      hasPhoto = _photoBytes != null;
+      preview = hasPhoto
+          ? ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                _photoBytes!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+              ),
+            )
+          : placeholder;
+    } else {
+      hasPhoto = storedPhotoId != null;
+      preview = hasPhoto
+          ? ItemPhoto(
+              photoId: storedPhotoId,
+              size: size,
+              placeholder: placeholder,
+            )
+          : placeholder;
+    }
+
+    return Row(
+      children: [
+        preview,
+        const SizedBox(width: 12),
+        Expanded(
+          child: Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: [
+              // A browser can't be asked for the camera directly; its file
+              // dialog already offers the camera where the device has one.
+              if (!kIsWeb)
+                TextButton.icon(
+                  onPressed: () => _pickPhoto(l10n, PhotoSource.camera),
+                  icon: const Icon(Icons.photo_camera_outlined),
+                  label: Text(l10n.takePhoto),
+                ),
+              TextButton.icon(
+                onPressed: () => _pickPhoto(l10n, PhotoSource.gallery),
+                icon: const Icon(Icons.photo_library_outlined),
+                label: Text(kIsWeb ? l10n.addPhoto : l10n.pickPhoto),
+              ),
+              if (hasPhoto)
+                TextButton.icon(
+                  onPressed: _removePhoto,
+                  icon: const Icon(Icons.delete_outline),
+                  label: Text(l10n.removePhoto),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _recurrenceFields(AppLocalizations l10n) {
     switch (_recurrence) {
       case RecurrenceType.byTime:
         return [
           TextFormField(
             controller: _intervalDaysController,
-            decoration: const InputDecoration(
-              labelText: 'Chu kỳ (ngày)',
-              helperText: 'Ví dụ 180 = khoảng 6 tháng',
+            decoration: InputDecoration(
+              labelText: l10n.intervalDays,
+              helperText: l10n.intervalDaysHelper,
             ),
             keyboardType: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             validator: (v) => (int.tryParse(v ?? '') ?? 0) <= 0
-                ? 'Nhập số ngày lớn hơn 0'
+                ? l10n.intervalDaysInvalid
                 : null,
           ),
         ];
@@ -300,19 +413,20 @@ class _ItemFormState extends State<_ItemForm> {
                 flex: 2,
                 child: TextFormField(
                   controller: _intervalValueController,
-                  decoration: const InputDecoration(labelText: 'Chu kỳ'),
+                  decoration: InputDecoration(labelText: l10n.intervalValue),
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
-                  validator: (v) =>
-                      (_parseDouble(v) ?? 0) <= 0 ? 'Nhập số lớn hơn 0' : null,
+                  validator: (v) => (_parseDouble(v) ?? 0) <= 0
+                      ? l10n.positiveNumberRequired
+                      : null,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: TextFormField(
                   controller: _unitController,
-                  decoration: const InputDecoration(labelText: 'Đơn vị'),
+                  decoration: InputDecoration(labelText: l10n.valueUnit),
                 ),
               ),
             ],
@@ -322,23 +436,22 @@ class _ItemFormState extends State<_ItemForm> {
             controller: _currentValueController,
             decoration: InputDecoration(
               labelText: _isEditing
-                  ? 'Chỉ số hiện tại'
-                  : 'Chỉ số lúc bảo trì gần nhất',
-              helperText: _isEditing
-                  ? null
-                  : 'Ví dụ số km trên đồng hồ khi thay dầu lần trước',
+                  ? l10n.currentReading
+                  : l10n.readingAtLastService,
+              helperText: _isEditing ? null : l10n.readingAtLastServiceHelper,
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             validator: (v) =>
-                _parseDouble(v) == null ? 'Nhập chỉ số hiện tại' : null,
+                _parseDouble(v) == null ? l10n.readingRequired : null,
           ),
         ];
       case RecurrenceType.once:
         return [
           FormField<DateTime>(
-            validator: (_) => _expiryDate == null ? 'Chọn ngày hết hạn' : null,
+            validator: (_) =>
+                _expiryDate == null ? l10n.expiryDateRequired : null,
             builder: (field) => _DateField(
-              label: 'Ngày hết hạn bảo hành',
+              label: l10n.expiryDate,
               value: _expiryDate,
               errorText: field.errorText,
               onTap: () async {
@@ -386,6 +499,7 @@ class _DateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return InkWell(
       onTap: onTap,
       child: InputDecorator(
@@ -394,7 +508,7 @@ class _DateField extends StatelessWidget {
           errorText: errorText,
           suffixIcon: const Icon(Icons.calendar_today, size: 18),
         ),
-        child: Text(value == null ? 'Chọn ngày' : formatDate(value!)),
+        child: Text(value == null ? l10n.pickDate : formatDate(l10n, value!)),
       ),
     );
   }

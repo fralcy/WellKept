@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/tracked_item_provider.dart';
 import '../../core/utils/item_labels.dart';
@@ -39,7 +40,7 @@ class _AddLogFormState extends State<_AddLogForm> {
     super.dispose();
   }
 
-  Future<void> _save() async {
+  Future<void> _save(AppLocalizations l10n) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
@@ -55,13 +56,14 @@ class _AddLogFormState extends State<_AddLogForm> {
       setState(() => _saving = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Không lưu được: $e')));
+      ).showSnackBar(SnackBar(content: Text(l10n.saveFailed('$e'))));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
+    final l10n = AppLocalizations.of(context)!;
     final provider = context.watch<TrackedItemProvider>();
     final item = provider.items.where((i) => i.id == widget.itemId).firstOrNull;
     if (item == null) return const SizedBox.shrink();
@@ -77,7 +79,7 @@ class _AddLogFormState extends State<_AddLogForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Ghi bảo trì: ${item.name}',
+            l10n.logTitle(item.name),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -86,7 +88,7 @@ class _AddLogFormState extends State<_AddLogForm> {
           ),
           const SizedBox(height: 4),
           Text(
-            dueSummary(status, item),
+            dueSummary(l10n, status, item),
             style: TextStyle(color: t.textSecondary),
           ),
           if (item.notes.isNotEmpty) ...[
@@ -105,11 +107,11 @@ class _AddLogFormState extends State<_AddLogForm> {
               if (picked != null) setState(() => _date = picked);
             },
             child: InputDecorator(
-              decoration: const InputDecoration(
-                labelText: 'Ngày bảo trì',
-                suffixIcon: Icon(Icons.calendar_today, size: 18),
+              decoration: InputDecoration(
+                labelText: l10n.logDate,
+                suffixIcon: const Icon(Icons.calendar_today, size: 18),
               ),
-              child: Text(formatDate(_date)),
+              child: Text(formatDate(l10n, _date)),
             ),
           ),
           if (tracksValue) ...[
@@ -117,19 +119,19 @@ class _AddLogFormState extends State<_AddLogForm> {
             TextFormField(
               controller: _valueController,
               decoration: InputDecoration(
-                labelText: 'Chỉ số lúc bảo trì (${item.valueUnit})',
+                labelText: l10n.logReading(item.valueUnit),
               ),
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
               validator: (v) =>
-                  _parseDouble(v) == null ? 'Nhập chỉ số hiện tại' : null,
+                  _parseDouble(v) == null ? l10n.readingRequired : null,
             ),
           ],
           const SizedBox(height: 12),
           TextFormField(
             controller: _noteController,
-            decoration: const InputDecoration(labelText: 'Ghi chú'),
+            decoration: InputDecoration(labelText: l10n.logNote),
             minLines: 1,
             maxLines: 3,
           ),
@@ -137,15 +139,15 @@ class _AddLogFormState extends State<_AddLogForm> {
           Align(
             alignment: Alignment.centerRight,
             child: NeumorphicButton(
-              onTap: _save,
+              onTap: () => _save(l10n),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: const Text('Lưu'),
+              child: Text(l10n.save),
             ),
           ),
           if (logs.isNotEmpty) ...[
             const SizedBox(height: 20),
             Text(
-              'Lịch sử bảo trì',
+              l10n.logHistory,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: t.textPrimary,
@@ -157,14 +159,14 @@ class _AddLogFormState extends State<_AddLogForm> {
                 dense: true,
                 title: Text(
                   [
-                    formatDate(log.date),
+                    formatDate(l10n, log.date),
                     if (log.value != null)
-                      '${formatValue(log.value!)} ${item.valueUnit}',
+                      '${formatValue(l10n, log.value!)} ${item.valueUnit}',
                   ].join(' · '),
                 ),
                 subtitle: log.note.isEmpty ? null : Text(log.note),
                 trailing: IconButton(
-                  tooltip: 'Xóa log',
+                  tooltip: l10n.deleteLog,
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () => provider.deleteLog(log.id),
                 ),
