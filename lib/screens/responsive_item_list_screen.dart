@@ -10,6 +10,7 @@ import '../core/widgets/neumorphic_container.dart';
 import '../models/tracked_item.dart';
 import 'modals/add_item_modal.dart';
 import 'modals/add_log_modal.dart';
+import 'modals/update_reading_modal.dart';
 import 'responsive_screen.dart';
 
 /// The app's only route: every tracked item, most urgent first. Adding an
@@ -95,6 +96,7 @@ class _ItemCard extends StatelessWidget {
         : status.isDueSoon
         ? t.accent
         : t.textSecondary;
+    final staleWarning = staleReadingWarning(status);
 
     return GestureDetector(
       onTap: () => showAddLogModal(context, item),
@@ -126,6 +128,24 @@ class _ItemCard extends StatelessWidget {
                           : FontWeight.normal,
                     ),
                   ),
+                  if (staleWarning != null) ...[
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Icon(Icons.speed, size: 16, color: t.textSecondary),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            staleWarning,
+                            style: TextStyle(
+                              color: t.textSecondary,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -136,16 +156,32 @@ class _ItemCard extends StatelessWidget {
                 switch (action) {
                   case _ItemAction.log:
                     showAddLogModal(context, item);
+                  case _ItemAction.reading:
+                    showUpdateReadingModal(context, item);
+                  case _ItemAction.edit:
+                    showEditItemModal(context, item);
                   case _ItemAction.delete:
                     _confirmDelete(context);
                 }
               },
-              itemBuilder: (_) => const [
-                PopupMenuItem(
+              itemBuilder: (_) => [
+                const PopupMenuItem(
                   value: _ItemAction.log,
                   child: Text('Ghi bảo trì'),
                 ),
-                PopupMenuItem(value: _ItemAction.delete, child: Text('Xóa')),
+                if (item.recurrenceType == RecurrenceType.byValue)
+                  const PopupMenuItem(
+                    value: _ItemAction.reading,
+                    child: Text('Cập nhật chỉ số'),
+                  ),
+                const PopupMenuItem(
+                  value: _ItemAction.edit,
+                  child: Text('Sửa'),
+                ),
+                const PopupMenuItem(
+                  value: _ItemAction.delete,
+                  child: Text('Xóa'),
+                ),
               ],
             ),
           ],
@@ -182,7 +218,7 @@ class _ItemCard extends StatelessWidget {
   }
 }
 
-enum _ItemAction { log, delete }
+enum _ItemAction { log, reading, edit, delete }
 
 class _ThemeMenu extends StatelessWidget {
   const _ThemeMenu();

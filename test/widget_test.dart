@@ -225,6 +225,113 @@ void main() {
     expect(find.textContaining('16.000 km'), findsOneWidget);
   });
 
+  testWidgets('editing an item through the menu updates the list', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await _itemProvider(tester).addItem(
+        name: 'Máy lọc nước',
+        recurrenceType: RecurrenceType.byTime,
+        recurrenceIntervalDays: 90,
+        purchaseDate: DateTime.now(),
+      );
+    });
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Còn 90 ngày'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    // Not a value-based item, so no "update reading" entry.
+    expect(find.text('Cập nhật chỉ số'), findsNothing);
+    await tester.tap(find.text('Sửa'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sửa món đồ'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Máy lọc nước'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Tên món đồ'),
+      'Máy lọc nước RO',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Chu kỳ (ngày)'),
+      '60',
+    );
+    await _tapSave(tester);
+
+    expect(find.text('Máy lọc nước RO'), findsOneWidget);
+    expect(find.textContaining('Còn 60 ngày'), findsOneWidget);
+    expect(_itemProvider(tester).items, hasLength(1));
+  });
+
+  testWidgets('updating the reading from the menu moves toward the due point', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await _itemProvider(tester).addItem(
+        name: 'Xe máy',
+        recurrenceType: RecurrenceType.byValue,
+        recurrenceIntervalValue: 2000,
+        currentValue: 15000,
+      );
+    });
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cập nhật chỉ số'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chỉ số đang lưu: 15.000 km'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Chỉ số hiện tại (km)'),
+      '16500',
+    );
+    await _tapSave(tester);
+
+    expect(find.text('Còn 500 km (mốc 17.000 km)'), findsOneWidget);
+    expect(
+      _itemProvider(tester).logsFor(_itemProvider(tester).items.single.id),
+      isEmpty,
+    );
+  });
+
+  testWidgets('a stale reading shows a warning on the card', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await tester.pumpWidget(const WellKeptApp());
+    await tester.pumpAndSettle();
+
+    final longAgo = DateTime.now().subtract(const Duration(days: 60));
+    await tester.runAsync(() async {
+      await DataManager().saveItem(
+        TrackedItem(
+          id: 'old-car',
+          name: 'Ô tô cũ',
+          recurrenceType: RecurrenceType.byValue,
+          recurrenceIntervalValue: 5000,
+          currentValue: 40000,
+          baselineValue: 40000,
+          createdAt: longAgo,
+          valueUpdatedAt: longAgo,
+        ),
+      );
+    });
+    _itemProvider(tester).refresh();
+    await tester.pumpAndSettle();
+
+    expect(find.text('60 ngày chưa cập nhật chỉ số'), findsOneWidget);
+  });
+
   testWidgets('deleting an item asks for confirmation first', (
     WidgetTester tester,
   ) async {

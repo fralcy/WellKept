@@ -11,17 +11,25 @@ import 'adaptive_modal.dart';
 
 /// Form to add a new [TrackedItem].
 Future<void> showAddItemModal(BuildContext context) {
-  return showAdaptiveModal(context, child: const _AddItemForm());
+  return showAdaptiveModal(context, child: const _ItemForm());
 }
 
-class _AddItemForm extends StatefulWidget {
-  const _AddItemForm();
+/// The same form, prefilled to edit an existing [item].
+Future<void> showEditItemModal(BuildContext context, TrackedItem item) {
+  return showAdaptiveModal(context, child: _ItemForm(item: item));
+}
+
+class _ItemForm extends StatefulWidget {
+  const _ItemForm({this.item});
+
+  /// Null when adding.
+  final TrackedItem? item;
 
   @override
-  State<_AddItemForm> createState() => _AddItemFormState();
+  State<_ItemForm> createState() => _ItemFormState();
 }
 
-class _AddItemFormState extends State<_AddItemForm> {
+class _ItemFormState extends State<_ItemForm> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _intervalDaysController = TextEditingController(text: '180');
@@ -36,6 +44,34 @@ class _AddItemFormState extends State<_AddItemForm> {
   DateTime _startDate = DateTime.now();
   DateTime? _expiryDate;
   bool _saving = false;
+
+  bool get _isEditing => widget.item != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final item = widget.item;
+    if (item == null) return;
+    _nameController.text = item.name;
+    if (item.recurrenceIntervalDays != null) {
+      _intervalDaysController.text = '${item.recurrenceIntervalDays}';
+    }
+    if (item.recurrenceIntervalValue != null) {
+      _intervalValueController.text = _formatInput(
+        item.recurrenceIntervalValue!,
+      );
+    }
+    if (item.currentValue != null) {
+      _currentValueController.text = _formatInput(item.currentValue!);
+    }
+    _unitController.text = item.valueUnit;
+    _leadDaysController.text = '${item.reminderLeadDays}';
+    _notesController.text = item.notes;
+    _category = item.category;
+    _recurrence = item.recurrenceType;
+    _startDate = item.purchaseDate ?? item.createdAt;
+    _expiryDate = item.expiryDate;
+  }
 
   @override
   void dispose() {
@@ -61,28 +97,72 @@ class _AddItemFormState extends State<_AddItemForm> {
   Future<void> _save() async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+
+    // Fields that don't apply to the chosen recurrence type are saved as
+    // null — on edit, that clears whatever an earlier type had set.
+    final name = _nameController.text.trim();
+    final intervalDays = _recurrence == RecurrenceType.byTime
+        ? int.parse(_intervalDaysController.text)
+        : null;
+    final intervalValue = _recurrence == RecurrenceType.byValue
+        ? _parseDouble(_intervalValueController.text)
+        : null;
+    final currentValue = _recurrence == RecurrenceType.byValue
+        ? _parseDouble(_currentValueController.text)
+        : null;
+    final expiryDate = _recurrence == RecurrenceType.once ? _expiryDate : null;
+    final leadDays = int.tryParse(_leadDaysController.text) ?? 7;
+    final notes = _notesController.text.trim();
+    final unit = _unitController.text.trim().isEmpty
+        ? 'km'
+        : _unitController.text.trim();
+
     try {
-      await context.read<TrackedItemProvider>().addItem(
-        name: _nameController.text.trim(),
-        category: _category,
-        purchaseDate: _startDate,
-        recurrenceType: _recurrence,
-        recurrenceIntervalDays: _recurrence == RecurrenceType.byTime
-            ? int.parse(_intervalDaysController.text)
-            : null,
-        recurrenceIntervalValue: _recurrence == RecurrenceType.byValue
-            ? _parseDouble(_intervalValueController.text)
-            : null,
-        currentValue: _recurrence == RecurrenceType.byValue
-            ? _parseDouble(_currentValueController.text)
-            : null,
-        expiryDate: _recurrence == RecurrenceType.once ? _expiryDate : null,
-        reminderLeadDays: int.tryParse(_leadDaysController.text) ?? 7,
-        notes: _notesController.text.trim(),
-        valueUnit: _unitController.text.trim().isEmpty
-            ? 'km'
-            : _unitController.text.trim(),
-      );
+      final provider = context.read<TrackedItemProvider>();
+      final original = widget.item;
+      if (original == null) {
+        await provider.addItem(
+          name: name,
+          category: _category,
+          purchaseDate: _startDate,
+          recurrenceType: _recurrence,
+          recurrenceIntervalDays: intervalDays,
+          recurrenceIntervalValue: intervalValue,
+          currentValue: currentValue,
+          expiryDate: expiryDate,
+          reminderLeadDays: leadDays,
+          notes: notes,
+          valueUnit: unit,
+        );
+      } else {
+        final readingChanged = currentValue != original.currentValue;
+        await provider.updateItem(
+          original.copyWith(
+            name: name,
+            category: _category,
+            purchaseDate: () => _startDate,
+            recurrenceType: _recurrence,
+            recurrenceIntervalDays: () => intervalDays,
+            recurrenceIntervalValue: () => intervalValue,
+            currentValue: () => currentValue,
+            expiryDate: () => expiryDate,
+            reminderLeadDays: leadDays,
+            notes: notes,
+            valueUnit: unit,
+            valueUpdatedAt: readingChanged && currentValue != null
+                ? () => DateTime.now()
+                : null,
+            // Editing "current reading" never moves the baseline; one is
+            // only seeded when the item becomes value-based for the first
+            // time, and dropped when it stops being value-based.
+            baselineValue: _recurrence != RecurrenceType.byValue
+                ? () => null
+                : original.baselineValue == null
+                ? () => currentValue
+                : null,
+          ),
+        );
+      }
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
@@ -104,7 +184,7 @@ class _AddItemFormState extends State<_AddItemForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Thêm món đồ',
+            _isEditing ? 'Sửa món đồ' : 'Thêm món đồ',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -240,9 +320,13 @@ class _AddItemFormState extends State<_AddItemForm> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _currentValueController,
-            decoration: const InputDecoration(
-              labelText: 'Chỉ số lúc bảo trì gần nhất',
-              helperText: 'Ví dụ số km trên đồng hồ khi thay dầu lần trước',
+            decoration: InputDecoration(
+              labelText: _isEditing
+                  ? 'Chỉ số hiện tại'
+                  : 'Chỉ số lúc bảo trì gần nhất',
+              helperText: _isEditing
+                  ? null
+                  : 'Ví dụ số km trên đồng hồ khi thay dầu lần trước',
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             validator: (v) =>
@@ -283,6 +367,9 @@ class _AddItemFormState extends State<_AddItemForm> {
 /// Accepts both "1500.5" and "1500,5".
 double? _parseDouble(String? v) =>
     double.tryParse((v ?? '').trim().replaceAll(',', '.'));
+
+/// Prefill text for a numeric field: "15000", not "15000.0".
+String _formatInput(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v';
 
 class _DateField extends StatelessWidget {
   const _DateField({
