@@ -154,26 +154,31 @@ class _ItemCard extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context) async {
+  Future<void> _confirmDelete(BuildContext context) {
     final provider = context.read<TrackedItemProvider>();
-    final confirmed = await showDialog<bool>(
+    return showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Xóa "${item.name}"?'),
         content: const Text('Toàn bộ lịch sử bảo trì của món đồ cũng bị xóa.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () => Navigator.of(context).pop(),
             child: const Text('Hủy'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            // Deletes straight from the button handler rather than after
+            // awaiting the dialog's result — the write then starts in the
+            // tap's own zone, which widget tests can run for real.
+            onPressed: () {
+              Navigator.of(context).pop();
+              provider.deleteItem(item.id);
+            },
             child: const Text('Xóa'),
           ),
         ],
       ),
     );
-    if (confirmed == true) await provider.deleteItem(item.id);
   }
 }
 
@@ -189,11 +194,14 @@ class _ThemeMenu extends StatelessWidget {
       tooltip: 'Đổi giao diện',
       icon: const Icon(Icons.palette_outlined),
       initialValue: settings.themeId,
-      onSelected: settings.setThemeId,
       itemBuilder: (_) => [
         for (final NeumorphicThemeConfig theme in neumorphicThemePresets)
           PopupMenuItem(
             value: theme.id,
+            // onTap (called directly on tap) rather than the button's
+            // onSelected (called after the menu's future completes) — see
+            // _ItemCard._confirmDelete for why.
+            onTap: () => settings.setThemeId(theme.id),
             child: Row(
               children: [
                 CircleAvatar(radius: 8, backgroundColor: theme.accent),
