@@ -11,6 +11,8 @@ class DueStatus {
     this.remainingValue,
     this.currentValue,
     this.lastLogDate,
+    this.daysSinceReading,
+    this.isReadingStale = false,
     this.isOverdue = false,
     this.isDueSoon = false,
     this.urgency = double.infinity,
@@ -37,9 +39,16 @@ class DueStatus {
   /// `byValue`: best-known current reading.
   final double? currentValue;
 
-  /// Date of the latest log, if any — for `byValue` the UI can warn when
-  /// the reading hasn't been updated in a long time.
+  /// Date of the latest log, if any.
   final DateTime? lastLogDate;
+
+  /// `byValue`: whole days since the reading was last entered (via a log,
+  /// "update reading", or when the item was added).
+  final int? daysSinceReading;
+
+  /// `byValue`: the reading is old enough that [remainingValue] may be
+  /// well off — the app can't read an odometer, so it asks for an update.
+  final bool isReadingStale;
 
   final bool isOverdue;
   final bool isDueSoon;

@@ -18,6 +18,9 @@ class DueCalculatorService {
   /// interval (e.g. the last 200 km of a 2,000 km interval).
   static const double _valueDueSoonFraction = 0.1;
 
+  /// A `byValue` reading older than this many days is flagged stale.
+  static const int staleReadingDays = 30;
+
   DueStatus calculate(
     TrackedItem item,
     List<MaintenanceLog> logs, {
@@ -32,7 +35,7 @@ class DueCalculatorService {
       case RecurrenceType.byTime:
         return _byTime(item, lastLog, day);
       case RecurrenceType.byValue:
-        return _byValue(item, itemLogs, lastLog);
+        return _byValue(item, itemLogs, lastLog, day);
       case RecurrenceType.once:
         return _once(item, lastLog, day);
       case RecurrenceType.none:
@@ -65,16 +68,19 @@ class DueCalculatorService {
     TrackedItem item,
     List<MaintenanceLog> sortedLogs,
     MaintenanceLog? lastLog,
+    DateTime day,
   ) {
     final interval = item.recurrenceIntervalValue;
     if (interval == null || interval <= 0) {
       return DueStatus.none(item.recurrenceType);
     }
     // Baseline = reading at the latest log that recorded one; before any
-    // such log, the reading entered when the item was added.
+    // such log, the item's own baseline (the reading entered when it was
+    // added). Never [TrackedItem.currentValue] while a baseline exists —
+    // otherwise updating today's reading would drag the due point along.
     final loggedValues = sortedLogs.map((l) => l.value).nonNulls;
     final baseline = loggedValues.isEmpty
-        ? item.currentValue
+        ? (item.baselineValue ?? item.currentValue)
         : loggedValues.last;
     if (baseline == null) return DueStatus.none(item.recurrenceType);
 
@@ -83,12 +89,26 @@ class DueCalculatorService {
     final current = math.max(item.currentValue ?? baseline, baseline);
     final nextDue = baseline + interval;
     final remaining = nextDue - current;
+
+    // Latest moment a reading was entered: the item's own stamp or the
+    // latest log that recorded one (items saved before the stamp existed
+    // fall back to their creation date).
+    final readingDates = [
+      item.valueUpdatedAt ?? item.createdAt,
+      for (final l in sortedLogs)
+        if (l.value != null) l.date,
+    ];
+    final lastReading = readingDates.reduce((a, b) => a.isAfter(b) ? a : b);
+    final daysSinceReading = math.max(0, _daysBetween(lastReading, day));
+
     return DueStatus(
       type: item.recurrenceType,
       nextDueValue: nextDue,
       remainingValue: remaining,
       currentValue: current,
       lastLogDate: lastLog?.date,
+      daysSinceReading: daysSinceReading,
+      isReadingStale: daysSinceReading > staleReadingDays,
       isOverdue: remaining < 0,
       isDueSoon: remaining <= interval * _valueDueSoonFraction,
       urgency: remaining / interval,

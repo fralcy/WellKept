@@ -87,7 +87,7 @@ void main() {
     });
 
     test('counts from the latest log that recorded a reading', () {
-      final s = calc.calculate(bike.copyWith(currentValue: 16500), [
+      final s = calc.calculate(bike.copyWith(currentValue: () => 16500), [
         log('bike', DateTime(2026, 9, 1), value: 15200),
         log('bike', DateTime(2026, 9, 20)), // no reading
       ], today: today);
@@ -98,14 +98,14 @@ void main() {
     });
 
     test('is due soon in the last 10% of the interval, overdue past it', () {
-      final soon = calc.calculate(bike.copyWith(currentValue: 16850), [
+      final soon = calc.calculate(bike.copyWith(currentValue: () => 16850), [
         log('bike', DateTime(2026, 9, 1), value: 15000),
       ], today: today);
       expect(soon.remainingValue, 150);
       expect(soon.isDueSoon, isTrue);
       expect(soon.isOverdue, isFalse);
 
-      final overdue = calc.calculate(bike.copyWith(currentValue: 17300), [
+      final overdue = calc.calculate(bike.copyWith(currentValue: () => 17300), [
         log('bike', DateTime(2026, 9, 1), value: 15000),
       ], today: today);
       expect(overdue.remainingValue, -300);
@@ -126,6 +126,88 @@ void main() {
       );
       expect(s.hasDuePoint, isFalse);
       expect(s.urgency, double.infinity);
+    });
+
+    group('stale reading', () {
+      final added = TrackedItem(
+        id: 'car',
+        name: 'Ô tô',
+        recurrenceType: RecurrenceType.byValue,
+        recurrenceIntervalValue: 5000,
+        currentValue: 40000,
+        createdAt: DateTime(2026, 8, 1),
+        valueUpdatedAt: DateTime(2026, 8, 1),
+      );
+
+      test('counts days since the reading was entered', () {
+        final fresh = calc.calculate(
+          added,
+          const [],
+          today: DateTime(2026, 8, 31),
+        );
+        expect(fresh.daysSinceReading, 30);
+        expect(fresh.isReadingStale, isFalse);
+
+        final stale = calc.calculate(
+          added,
+          const [],
+          today: DateTime(2026, 9, 1),
+        );
+        expect(stale.daysSinceReading, 31);
+        expect(stale.isReadingStale, isTrue);
+      });
+
+      test('a newer log with a reading refreshes it, one without does not', () {
+        final withReading = calc.calculate(added, [
+          log('car', DateTime(2026, 10, 1), value: 42000),
+        ], today: today);
+        expect(withReading.daysSinceReading, 12);
+        expect(withReading.isReadingStale, isFalse);
+
+        final withoutReading = calc.calculate(added, [
+          log('car', DateTime(2026, 10, 1)),
+        ], today: today);
+        expect(withoutReading.daysSinceReading, 73);
+        expect(withoutReading.isReadingStale, isTrue);
+      });
+
+      test('a newer valueUpdatedAt (update reading) refreshes it', () {
+        final s = calc.calculate(
+          added.copyWith(valueUpdatedAt: () => DateTime(2026, 10, 10)),
+          [log('car', DateTime(2026, 8, 15), value: 40500)],
+          today: today,
+        );
+        expect(s.daysSinceReading, 3);
+        expect(s.isReadingStale, isFalse);
+      });
+
+      test(
+        'falls back to createdAt for items saved before the stamp existed',
+        () {
+          final s = calc.calculate(
+            added.copyWith(valueUpdatedAt: () => null),
+            const [],
+            today: today,
+          );
+          expect(s.daysSinceReading, 73);
+        },
+      );
+
+      test('never applies to time-based items', () {
+        final s = calc.calculate(
+          TrackedItem(
+            id: 't',
+            name: 't',
+            recurrenceType: RecurrenceType.byTime,
+            recurrenceIntervalDays: 30,
+            createdAt: DateTime(2020),
+          ),
+          const [],
+          today: today,
+        );
+        expect(s.isReadingStale, isFalse);
+        expect(s.daysSinceReading, isNull);
+      });
     });
   });
 

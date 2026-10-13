@@ -82,3 +82,10 @@ String dueSummary(DueStatus s, TrackedItem item) {
       return 'Không đặt mốc nhắc';
   }
 }
+
+/// Warning shown under [dueSummary] when a `byValue` reading is stale, or
+/// null when there's nothing to warn about.
+String? staleReadingWarning(DueStatus s) {
+  if (!s.isReadingStale) return null;
+  return '${s.daysSinceReading} ngày chưa cập nhật chỉ số';
+}

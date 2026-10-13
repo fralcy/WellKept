@@ -133,12 +133,29 @@ class TrackedItemProvider extends ChangeNotifier {
     if (item != null &&
         value != null &&
         (item.currentValue == null || value > item.currentValue!)) {
-      await _dataManager.saveItem(item.copyWith(currentValue: value));
+      await _dataManager.saveItem(item.copyWith(currentValue: () => value));
     }
 
     _reload();
     notifyListeners();
     return log;
+  }
+
+  /// Records a new reading (e.g. today's odometer) without a maintenance
+  /// log — moves the item toward its next due value and resets the
+  /// "reading not updated in a while" warning. May also lower the reading,
+  /// to correct a typo.
+  Future<void> updateReading(String itemId, double value) async {
+    final item = _dataManager.getItem(itemId);
+    if (item == null) return;
+    await _dataManager.saveItem(
+      item.copyWith(
+        currentValue: () => value,
+        valueUpdatedAt: () => DateTime.now(),
+      ),
+    );
+    _reload();
+    notifyListeners();
   }
 
   Future<void> deleteLog(String id) async {

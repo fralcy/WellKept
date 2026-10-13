@@ -95,6 +95,20 @@ class TrackedItem extends HiveObject {
   @HiveField(14)
   DateTime updatedAt;
 
+  /// When [currentValue] was last entered (at creation, via "update
+  /// reading", or by a log) — drives the "reading not updated in a while"
+  /// warning, since the app can't read an odometer itself.
+  @HiveField(15)
+  DateTime? valueUpdatedAt;
+
+  /// `byValue`: reading at the last maintenance *before* any log existed
+  /// (entered when the item is added). Kept apart from [currentValue] so
+  /// updating today's reading moves the item toward its due point instead
+  /// of dragging the due point along with it. Logs with a reading take
+  /// over as the baseline once they exist.
+  @HiveField(16)
+  double? baselineValue;
+
   TrackedItem({
     required this.id,
     required this.name,
@@ -111,6 +125,8 @@ class TrackedItem extends HiveObject {
     this.valueUnit = 'km',
     DateTime? createdAt,
     DateTime? updatedAt,
+    this.valueUpdatedAt,
+    this.baselineValue,
   }) : createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
@@ -128,6 +144,7 @@ class TrackedItem extends HiveObject {
     int reminderLeadDays = 7,
     String notes = '',
     String valueUnit = 'km',
+    double? baselineValue,
   }) {
     final now = DateTime.now();
     return TrackedItem(
@@ -146,41 +163,58 @@ class TrackedItem extends HiveObject {
       valueUnit: valueUnit,
       createdAt: now,
       updatedAt: now,
+      valueUpdatedAt: currentValue == null ? null : now,
+      // The reading entered when adding an item is the one at its last
+      // maintenance, so it doubles as the baseline unless told otherwise.
+      baselineValue: baselineValue ?? currentValue,
     );
   }
 
+  /// Nullable fields take a getter so they can be cleared, not just set:
+  /// `copyWith(expiryDate: () => null)` removes the expiry date, while
+  /// omitting the argument keeps the current value.
   TrackedItem copyWith({
     String? name,
     ItemCategory? category,
-    String? photoId,
-    DateTime? purchaseDate,
+    String? Function()? photoId,
+    DateTime? Function()? purchaseDate,
     RecurrenceType? recurrenceType,
-    int? recurrenceIntervalDays,
-    double? recurrenceIntervalValue,
-    double? currentValue,
-    DateTime? expiryDate,
+    int? Function()? recurrenceIntervalDays,
+    double? Function()? recurrenceIntervalValue,
+    double? Function()? currentValue,
+    DateTime? Function()? expiryDate,
     int? reminderLeadDays,
     String? notes,
     String? valueUnit,
+    DateTime? Function()? valueUpdatedAt,
+    double? Function()? baselineValue,
   }) {
     return TrackedItem(
       id: id,
       name: name ?? this.name,
       category: category ?? this.category,
-      photoId: photoId ?? this.photoId,
-      purchaseDate: purchaseDate ?? this.purchaseDate,
+      photoId: photoId != null ? photoId() : this.photoId,
+      purchaseDate: purchaseDate != null ? purchaseDate() : this.purchaseDate,
       recurrenceType: recurrenceType ?? this.recurrenceType,
-      recurrenceIntervalDays:
-          recurrenceIntervalDays ?? this.recurrenceIntervalDays,
-      recurrenceIntervalValue:
-          recurrenceIntervalValue ?? this.recurrenceIntervalValue,
-      currentValue: currentValue ?? this.currentValue,
-      expiryDate: expiryDate ?? this.expiryDate,
+      recurrenceIntervalDays: recurrenceIntervalDays != null
+          ? recurrenceIntervalDays()
+          : this.recurrenceIntervalDays,
+      recurrenceIntervalValue: recurrenceIntervalValue != null
+          ? recurrenceIntervalValue()
+          : this.recurrenceIntervalValue,
+      currentValue: currentValue != null ? currentValue() : this.currentValue,
+      expiryDate: expiryDate != null ? expiryDate() : this.expiryDate,
       reminderLeadDays: reminderLeadDays ?? this.reminderLeadDays,
       notes: notes ?? this.notes,
       valueUnit: valueUnit ?? this.valueUnit,
       createdAt: createdAt,
       updatedAt: DateTime.now(),
+      valueUpdatedAt: valueUpdatedAt != null
+          ? valueUpdatedAt()
+          : this.valueUpdatedAt,
+      baselineValue: baselineValue != null
+          ? baselineValue()
+          : this.baselineValue,
     );
   }
 }

@@ -52,12 +52,18 @@ class MaintenanceLog extends HiveObject {
     );
   }
 
-  MaintenanceLog copyWith({DateTime? date, double? value, String? note}) {
+  /// [value] takes a getter so it can be cleared — see
+  /// `TrackedItem.copyWith`.
+  MaintenanceLog copyWith({
+    DateTime? date,
+    double? Function()? value,
+    String? note,
+  }) {
     return MaintenanceLog(
       id: id,
       itemId: itemId,
       date: date ?? this.date,
-      value: value ?? this.value,
+      value: value != null ? value() : this.value,
       note: note ?? this.note,
       createdAt: createdAt,
     );

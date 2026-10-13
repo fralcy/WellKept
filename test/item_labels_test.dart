@@ -17,6 +17,25 @@ void main() {
     expect(formatDate(DateTime(2026, 3, 5)), '05/03/2026');
   });
 
+  test('staleReadingWarning only when the reading is stale', () {
+    expect(
+      staleReadingWarning(
+        const DueStatus(
+          type: RecurrenceType.byValue,
+          daysSinceReading: 45,
+          isReadingStale: true,
+        ),
+      ),
+      '45 ngày chưa cập nhật chỉ số',
+    );
+    expect(
+      staleReadingWarning(
+        const DueStatus(type: RecurrenceType.byValue, daysSinceReading: 3),
+      ),
+      isNull,
+    );
+  });
+
   group('dueSummary', () {
     test('byTime: remaining, today, overdue', () {
       expect(

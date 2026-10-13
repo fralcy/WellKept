@@ -124,7 +124,7 @@ void main() {
         photoId,
         Uint8List.fromList([1, 2, 3]),
       );
-      await provider.updateItem(doomed.copyWith(photoId: photoId));
+      await provider.updateItem(doomed.copyWith(photoId: () => photoId));
       await provider.addLog(itemId: doomed.id, date: DateTime(2026, 1, 1));
       await provider.addLog(itemId: keep.id, date: DateTime(2026, 1, 1));
 
@@ -172,6 +172,71 @@ void main() {
       'Z không nhắc',
     ]);
   });
+
+  test(
+    'updateReading sets the reading and its timestamp without a log',
+    () async {
+      final item = await addBike();
+      final before = DateTime.now();
+
+      await provider.updateReading(item.id, 16200);
+
+      final saved = DataManager().getItem(item.id)!;
+      expect(saved.currentValue, 16200);
+      expect(saved.valueUpdatedAt!.isBefore(before), isFalse);
+      expect(provider.logsFor(item.id), isEmpty);
+      // Regression: with no log yet, the baseline must stay at the reading
+      // entered at creation (15000), not follow the updated reading —
+      // otherwise the due point would move away as fast as the bike does.
+      expect(saved.baselineValue, 15000);
+      final status = provider.statusFor(provider.items.single);
+      expect(status.currentValue, 16200);
+      expect(status.nextDueValue, 17000);
+      expect(status.remainingValue, 800);
+      expect(status.isReadingStale, isFalse);
+    },
+  );
+
+  test('updateReading after a log moves toward the due point', () async {
+    final item = await addBike(currentValue: 15000);
+    await provider.addLog(
+      itemId: item.id,
+      date: DateTime(2026, 9, 1),
+      value: 15000,
+    );
+
+    await provider.updateReading(item.id, 16500);
+
+    final status = provider.statusFor(provider.items.single);
+    expect(status.nextDueValue, 17000);
+    expect(status.remainingValue, 500);
+  });
+
+  test('updateReading on a missing item is a no-op', () async {
+    await provider.updateReading('nope', 1);
+    expect(provider.items, isEmpty);
+  });
+
+  test(
+    'updateItem can clear fields left over from another recurrence type',
+    () async {
+      final item = await addBike();
+      await provider.updateItem(
+        item.copyWith(
+          recurrenceType: RecurrenceType.byTime,
+          recurrenceIntervalDays: () => 90,
+          recurrenceIntervalValue: () => null,
+          currentValue: () => null,
+        ),
+      );
+
+      final saved = DataManager().getItem(item.id)!;
+      expect(saved.recurrenceType, RecurrenceType.byTime);
+      expect(saved.recurrenceIntervalDays, 90);
+      expect(saved.recurrenceIntervalValue, isNull);
+      expect(saved.currentValue, isNull);
+    },
+  );
 
   test('refresh reloads data written behind the provider\'s back', () async {
     final other = TrackedItemProvider();

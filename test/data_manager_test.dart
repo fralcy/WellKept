@@ -97,6 +97,68 @@ void main() {
     expect(updated.updatedAt.isAfter(DateTime(2020)), isTrue);
   });
 
+  test('copyWith can clear nullable fields, and keeps them when omitted', () {
+    final item = TrackedItem(
+      id: 'x',
+      name: 'x',
+      photoId: 'p',
+      purchaseDate: DateTime(2025),
+      recurrenceIntervalDays: 30,
+      recurrenceIntervalValue: 2000,
+      currentValue: 100,
+      expiryDate: DateTime(2027),
+      valueUpdatedAt: DateTime(2026),
+    );
+
+    final kept = item.copyWith(name: 'y');
+    expect(kept.photoId, 'p');
+    expect(kept.purchaseDate, DateTime(2025));
+    expect(kept.recurrenceIntervalDays, 30);
+    expect(kept.recurrenceIntervalValue, 2000);
+    expect(kept.currentValue, 100);
+    expect(kept.expiryDate, DateTime(2027));
+    expect(kept.valueUpdatedAt, DateTime(2026));
+
+    final cleared = item.copyWith(
+      photoId: () => null,
+      purchaseDate: () => null,
+      recurrenceIntervalDays: () => null,
+      recurrenceIntervalValue: () => null,
+      currentValue: () => null,
+      expiryDate: () => null,
+      valueUpdatedAt: () => null,
+    );
+    expect(cleared.photoId, isNull);
+    expect(cleared.purchaseDate, isNull);
+    expect(cleared.recurrenceIntervalDays, isNull);
+    expect(cleared.recurrenceIntervalValue, isNull);
+    expect(cleared.currentValue, isNull);
+    expect(cleared.expiryDate, isNull);
+    expect(cleared.valueUpdatedAt, isNull);
+
+    final log = MaintenanceLog(
+      id: 'l',
+      itemId: 'x',
+      date: DateTime(2026),
+      value: 5,
+    );
+    expect(log.copyWith(note: 'n').value, 5);
+    expect(log.copyWith(value: () => null).value, isNull);
+  });
+
+  test('create stamps valueUpdatedAt only when a reading is given', () async {
+    final withReading = TrackedItem.create(id: 'a', name: 'a', currentValue: 1);
+    final withoutReading = TrackedItem.create(id: 'b', name: 'b');
+    expect(withReading.valueUpdatedAt, isNotNull);
+    expect(withoutReading.valueUpdatedAt, isNull);
+
+    await DataManager().saveItem(withReading);
+    expect(
+      DataManager().getItem('a')!.valueUpdatedAt,
+      withReading.valueUpdatedAt,
+    );
+  });
+
   group('PhotoStorageService', () {
     PhotoStorageService service() => PhotoStorageService();
 
