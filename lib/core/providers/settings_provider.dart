@@ -18,6 +18,15 @@ class SettingsProvider extends ChangeNotifier {
   String get languageCode => _settings.languageCode;
   String get themeId => _settings.themeId;
   NeumorphicThemeConfig get themeConfig => themeById(themeId);
+  int get reminderHour => _settings.reminderHour;
+  int get reminderMinute => _settings.reminderMinute;
+
+  Future<void> setReminderTime(int hour, int minute) async {
+    await _dataManager.saveSettings(
+      _settings.copyWith(reminderHour: hour, reminderMinute: minute),
+    );
+    notifyListeners();
+  }
 
   Future<void> setThemeId(String id) async {
     await _dataManager.saveSettings(_settings.copyWith(themeId: id));

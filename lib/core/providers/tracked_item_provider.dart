@@ -6,6 +6,7 @@ import '../../models/tracked_item.dart';
 import '../models/due_status.dart';
 import '../utils/data_manager.dart';
 import '../utils/due_calculator_service.dart';
+import '../utils/photo_storage_service.dart';
 
 /// CRUD over [TrackedItem]s *and* their [MaintenanceLog]s via
 /// [DataManager] — one provider for both, since every log change also
@@ -14,13 +15,33 @@ class TrackedItemProvider extends ChangeNotifier {
   TrackedItemProvider({
     DataManager? dataManager,
     DueCalculatorService? dueCalculator,
+    PhotoStorageService? photoStorage,
   }) : _dataManager = dataManager ?? DataManager(),
-       _dueCalculator = dueCalculator ?? const DueCalculatorService() {
+       _dueCalculator = dueCalculator ?? const DueCalculatorService(),
+       _photoStorage =
+           photoStorage ??
+           PhotoStorageService(dataManager: dataManager ?? DataManager()) {
     _reload();
   }
 
   final DataManager _dataManager;
   final DueCalculatorService _dueCalculator;
+  final PhotoStorageService _photoStorage;
+
+  Future<Uint8List?> loadPhoto(String photoId) => _photoStorage.load(photoId);
+
+  /// Replaces the item's photo with [bytes] (or just removes it when
+  /// null), deleting the previous photo's bytes so none are orphaned.
+  Future<void> setItemPhoto(String itemId, Uint8List? bytes) async {
+    final item = _dataManager.getItem(itemId);
+    if (item == null) return;
+    final oldPhotoId = item.photoId;
+    final newPhotoId = bytes == null ? null : await _photoStorage.save(bytes);
+    await _dataManager.saveItem(item.copyWith(photoId: () => newPhotoId));
+    if (oldPhotoId != null) await _photoStorage.delete(oldPhotoId);
+    _reload();
+    notifyListeners();
+  }
 
   List<TrackedItem> _items = [];
   Map<String, List<MaintenanceLog>> _logsByItem = {};

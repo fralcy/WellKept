@@ -238,6 +238,51 @@ void main() {
     },
   );
 
+  group('setItemPhoto', () {
+    test('stores the bytes and points the item at them', () async {
+      final item = await addBike();
+      await provider.setItemPhoto(item.id, Uint8List.fromList([1, 2, 3]));
+
+      final photoId = provider.items.single.photoId;
+      expect(photoId, isNotNull);
+      expect(await provider.loadPhoto(photoId!), [1, 2, 3]);
+    });
+
+    test('replacing a photo deletes the old bytes', () async {
+      final item = await addBike();
+      await provider.setItemPhoto(item.id, Uint8List.fromList([1]));
+      final oldId = provider.items.single.photoId!;
+
+      await provider.setItemPhoto(item.id, Uint8List.fromList([2]));
+      final newId = provider.items.single.photoId!;
+
+      expect(newId, isNot(oldId));
+      expect(await provider.loadPhoto(newId), [2]);
+      expect(await provider.loadPhoto(oldId), isNull);
+    });
+
+    test('null removes the photo and its bytes', () async {
+      final item = await addBike();
+      await provider.setItemPhoto(item.id, Uint8List.fromList([1]));
+      final oldId = provider.items.single.photoId!;
+
+      await provider.setItemPhoto(item.id, null);
+
+      expect(provider.items.single.photoId, isNull);
+      expect(await provider.loadPhoto(oldId), isNull);
+    });
+
+    test('keeps the rest of the item untouched', () async {
+      final item = await addBike(currentValue: 15000);
+      await provider.setItemPhoto(item.id, Uint8List.fromList([1]));
+
+      final saved = provider.items.single;
+      expect(saved.name, 'Xe máy');
+      expect(saved.currentValue, 15000);
+      expect(saved.baselineValue, 15000);
+    });
+  });
+
   test('refresh reloads data written behind the provider\'s back', () async {
     final other = TrackedItemProvider();
     await other.addItem(name: 'Ghi từ chỗ khác');
