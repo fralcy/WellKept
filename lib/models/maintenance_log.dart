@@ -1,0 +1,65 @@
+import 'package:hive/hive.dart';
+
+part 'maintenance_log.g.dart';
+
+/// One maintenance event for a [TrackedItem] (see `tracked_item.dart` for
+/// the typeId registry). The latest log is what the next due point is
+/// counted from.
+@HiveType(typeId: 4)
+class MaintenanceLog extends HiveObject {
+  @HiveField(0)
+  String id;
+
+  @HiveField(1)
+  String itemId;
+
+  @HiveField(2)
+  DateTime date;
+
+  /// Reading at the time of maintenance (e.g. odometer), if relevant.
+  @HiveField(3)
+  double? value;
+
+  @HiveField(4)
+  String note;
+
+  @HiveField(5)
+  DateTime createdAt;
+
+  MaintenanceLog({
+    required this.id,
+    required this.itemId,
+    required this.date,
+    this.value,
+    this.note = '',
+    DateTime? createdAt,
+  }) : createdAt = createdAt ?? DateTime.now();
+
+  factory MaintenanceLog.create({
+    required String id,
+    required String itemId,
+    required DateTime date,
+    double? value,
+    String note = '',
+  }) {
+    return MaintenanceLog(
+      id: id,
+      itemId: itemId,
+      date: date,
+      value: value,
+      note: note,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  MaintenanceLog copyWith({DateTime? date, double? value, String? note}) {
+    return MaintenanceLog(
+      id: id,
+      itemId: itemId,
+      date: date ?? this.date,
+      value: value ?? this.value,
+      note: note ?? this.note,
+      createdAt: createdAt,
+    );
+  }
+}
