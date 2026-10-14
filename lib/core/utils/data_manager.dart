@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import '../../models/app_settings.dart';
 import '../../models/maintenance_log.dart';
 import '../../models/tracked_item.dart';
+import '../models/backup_data.dart';
 
 /// Singleton owner of every Hive box in the app. `initialize()` runs once
 /// in `main()`: registers all TypeAdapters, opens boxes, and seeds default
@@ -138,6 +139,49 @@ class DataManager {
 
   Future<void> deletePhotoBytes(String id) async {
     await _photosBox.delete(id);
+  }
+
+  // ---------------------------------------------------------------------
+  // Backup
+  // ---------------------------------------------------------------------
+
+  /// Snapshot of everything for a backup file — only photos that some
+  /// item or log still references, so orphans never get exported.
+  Future<BackupData> collectBackup() async {
+    final items = getAllItems();
+    final logs = getAllLogs();
+    final photoIds = {
+      for (final item in items) item.photoId,
+      for (final log in logs) log.photoId,
+    }.nonNulls;
+    final photos = <String, Uint8List>{};
+    for (final id in photoIds) {
+      final bytes = await _photosBox.get(id);
+      if (bytes != null) photos[id] = bytes;
+    }
+    return BackupData(
+      items: items,
+      logs: logs,
+      settings: settings,
+      photos: photos,
+    );
+  }
+
+  /// [replace]: wipe everything first and take the backup's settings too.
+  /// Otherwise merge by id — records in the backup overwrite same-id ones
+  /// here, everything else (and the current settings) is kept.
+  Future<void> restoreBackup(BackupData data, {required bool replace}) async {
+    if (replace) {
+      await _itemsBox.clear();
+      await _logsBox.clear();
+      await _photosBox.clear();
+      await _settingsBox.put(_settingsKey, data.settings);
+    }
+    await _itemsBox.putAll({for (final i in data.items) i.id: i});
+    await _logsBox.putAll({for (final l in data.logs) l.id: l});
+    for (final entry in data.photos.entries) {
+      await _photosBox.put(entry.key, entry.value);
+    }
   }
 
   /// Resets all app data (items, logs, photos + settings back to defaults).

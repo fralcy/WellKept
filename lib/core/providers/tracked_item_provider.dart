@@ -3,7 +3,9 @@ import 'package:uuid/uuid.dart';
 
 import '../../models/maintenance_log.dart';
 import '../../models/tracked_item.dart';
+import '../models/backup_data.dart';
 import '../models/due_status.dart';
+import '../utils/backup_service.dart';
 import '../utils/data_manager.dart';
 import '../utils/due_calculator_service.dart';
 import '../utils/photo_storage_service.dart';
@@ -215,6 +217,20 @@ class TrackedItemProvider extends ChangeNotifier {
       if (log.photoId != null) await _photoStorage.delete(log.photoId!);
       await _recomputeReading(log.itemId);
     }
+    _reload();
+    notifyListeners();
+  }
+
+  /// Everything (records + referenced photos) as backup-file bytes.
+  Future<Uint8List> exportBackup({
+    BackupService backupService = const BackupService(),
+  }) async => backupService.encode(await _dataManager.collectBackup());
+
+  /// Restores [data] (already decoded by [BackupService.decode]); see
+  /// [DataManager.restoreBackup] for [replace] vs merge. Callers should
+  /// also refresh SettingsProvider when replacing.
+  Future<void> importBackup(BackupData data, {required bool replace}) async {
+    await _dataManager.restoreBackup(data, replace: replace);
     _reload();
     notifyListeners();
   }
