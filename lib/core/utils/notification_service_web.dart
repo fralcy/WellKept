@@ -21,4 +21,10 @@ class NotificationService implements NotificationServiceBase {
     required String channelName,
     required String channelDescription,
   }) async {}
+
+  @override
+  Stream<String> get tappedItemIds => const Stream.empty();
+
+  @override
+  Future<String?> launchItemId() async => null;
 }

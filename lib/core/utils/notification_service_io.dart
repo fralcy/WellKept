@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -34,8 +35,26 @@ class NotificationService implements NotificationServiceBase {
         android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: darwinSettings,
       ),
+      onDidReceiveNotificationResponse: (response) {
+        final itemId = response.payload;
+        if (itemId != null && itemId.isNotEmpty) _taps.add(itemId);
+      },
     );
     _initialized = true;
+  }
+
+  final _taps = StreamController<String>.broadcast();
+
+  @override
+  Stream<String> get tappedItemIds => _taps.stream;
+
+  @override
+  Future<String?> launchItemId() async {
+    if (!_initialized) return null;
+    final details = await _plugin.getNotificationAppLaunchDetails();
+    if (details == null || !details.didNotificationLaunchApp) return null;
+    final itemId = details.notificationResponse?.payload;
+    return (itemId == null || itemId.isEmpty) ? null : itemId;
   }
 
   @override

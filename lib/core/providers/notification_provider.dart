@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 
 import '../l10n/app_localizations.dart';
@@ -45,15 +47,27 @@ class NotificationProvider extends ChangeNotifier {
   /// What the last pass handed to the OS — mainly for tests/debugging.
   List<ScheduledReminder> get scheduled => List.unmodifiable(_scheduled);
 
+  /// Item id of a tapped reminder that the UI hasn't opened yet. The item
+  /// list screen listens, opens that item, and sets it back to null.
+  final ValueNotifier<String?> pendingItemId = ValueNotifier(null);
+
+  StreamSubscription<String>? _tapSubscription;
+
   Future<void> init() async {
     try {
       await _service.init();
       _initialized = true;
+      _tapSubscription = _service.tappedItemIds.listen(
+        (id) => pendingItemId.value = id,
+      );
+      // Launched by tapping a reminder while the app was closed.
+      final launchId = await _service.launchItemId();
+      if (launchId != null) pendingItemId.value = launchId;
     } catch (e, st) {
       // Notifications failing must not stop the app — everything else
       // works without them.
       debugPrint('NotificationService init failed: $e\n$st');
-      return;
+      if (!_initialized) return;
     }
     await rescheduleAll();
   }
@@ -100,6 +114,8 @@ class NotificationProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _tapSubscription?.cancel();
+    pendingItemId.dispose();
     _items.removeListener(_onChanged);
     _settings.removeListener(_onChanged);
     super.dispose();

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -7,9 +8,24 @@ import 'package:well_kept/core/utils/photo_picker_service.dart';
 
 /// Records calls instead of touching the platform notification plugin.
 class FakeNotificationService implements NotificationServiceBase {
-  FakeNotificationService({this.permissionGranted = true});
+  FakeNotificationService({this.permissionGranted = true, this.launchedFrom});
 
   final bool permissionGranted;
+
+  /// Simulates the app being launched by tapping this item's reminder.
+  final String? launchedFrom;
+
+  final _taps = StreamController<String>.broadcast();
+
+  /// Simulates the user tapping a reminder for [itemId] while running.
+  void tap(String itemId) => _taps.add(itemId);
+
+  @override
+  Stream<String> get tappedItemIds => _taps.stream;
+
+  @override
+  Future<String?> launchItemId() async => launchedFrom;
+
   int initCalls = 0;
   int permissionRequests = 0;
   List<ScheduledReminder> scheduled = const [];

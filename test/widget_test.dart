@@ -558,6 +558,160 @@ void main() {
     expect(find.text('Xóa ảnh'), findsNothing);
   });
 
+  testWidgets('tapping a past log loads it into the form to edit it', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      final item = await _itemProvider(tester).addItem(
+        name: 'Xe máy',
+        recurrenceType: RecurrenceType.byValue,
+        recurrenceIntervalValue: 2000,
+        currentValue: 15000,
+      );
+      await _itemProvider(tester).addLog(
+        itemId: item.id,
+        date: DateTime(2026, 9, 1),
+        value: 15500,
+        note: 'Thay nhớt',
+      );
+    });
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Xe máy'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Thay nhớt'));
+    await tester.tap(find.text('Thay nhớt'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sửa log ngày 01/09/2026'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, '15500'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Thay nhớt'),
+      'Thay nhớt + lọc gió',
+    );
+    await _tapSave(tester);
+
+    // Saving an edit returns the sheet to "add" mode instead of closing it.
+    expect(find.text('Ghi bảo trì: Xe máy'), findsOneWidget);
+    expect(find.text('Thay nhớt + lọc gió'), findsOneWidget);
+    final log = _itemProvider(
+      tester,
+    ).logsFor(_itemProvider(tester).items.single.id).single;
+    expect(log.note, 'Thay nhớt + lọc gió');
+    expect(log.value, 15500);
+  });
+
+  testWidgets('searching narrows the list, ignoring accents', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await _itemProvider(tester).addItem(name: 'Lõi lọc nước');
+      await _itemProvider(tester).addItem(name: 'Nồi cơm điện');
+    });
+    await tester.pumpAndSettle();
+
+    final search = find.widgetWithText(TextField, 'Tìm theo tên, ghi chú');
+    await tester.enterText(search, 'loc nuoc');
+    await tester.pumpAndSettle();
+    expect(find.text('Lõi lọc nước'), findsOneWidget);
+    expect(find.text('Nồi cơm điện'), findsNothing);
+
+    await tester.enterText(search, 'không có gì');
+    await tester.pumpAndSettle();
+    expect(find.text('Không có món đồ nào khớp bộ lọc.'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(TextButton, 'Xóa bộ lọc'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lõi lọc nước'), findsOneWidget);
+    expect(find.text('Nồi cơm điện'), findsOneWidget);
+  });
+
+  testWidgets('category chips filter the list', (WidgetTester tester) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    await tester.runAsync(() async {
+      await _itemProvider(
+        tester,
+      ).addItem(name: 'Xe Wave', category: ItemCategory.vehicle);
+      await _itemProvider(
+        tester,
+      ).addItem(name: 'Tủ lạnh', category: ItemCategory.home);
+    });
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Xe cộ'));
+    await tester.pumpAndSettle();
+    expect(find.text('Xe Wave'), findsOneWidget);
+    expect(find.text('Tủ lạnh'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilterChip, 'Xe cộ'));
+    await tester.pumpAndSettle();
+    expect(find.text('Tủ lạnh'), findsOneWidget);
+  });
+
+  testWidgets('tapping a reminder while running opens that item', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    final notifications = FakeNotificationService();
+    await tester.pumpWidget(_app(notifications: notifications));
+    await tester.pumpAndSettle();
+    late TrackedItem item;
+    await tester.runAsync(() async {
+      item = await _itemProvider(tester).addItem(name: 'Máy giặt');
+    });
+    await tester.pumpAndSettle();
+
+    notifications.tap(item.id);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ghi bảo trì: Máy giặt'), findsOneWidget);
+  });
+
+  testWidgets('a reminder for a deleted item is ignored', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    final notifications = FakeNotificationService();
+    await tester.pumpWidget(_app(notifications: notifications));
+    await tester.pumpAndSettle();
+
+    notifications.tap('gone');
+    await tester.pumpAndSettle();
+
+    expect(find.byType(BottomSheet), findsNothing);
+  });
+
+  testWidgets('launching the app from a reminder opens that item', (
+    WidgetTester tester,
+  ) async {
+    await _resetData(tester);
+    await _usePhoneSize(tester);
+    await tester.runAsync(
+      () => DataManager().saveItem(TrackedItem(id: 'wm', name: 'Máy giặt')),
+    );
+
+    await tester.pumpWidget(
+      _app(notifications: FakeNotificationService(launchedFrom: 'wm')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ghi bảo trì: Máy giặt'), findsOneWidget);
+  });
+
   testWidgets('on a desktop-sized screen the add-item form opens as a dialog', (
     WidgetTester tester,
   ) async {

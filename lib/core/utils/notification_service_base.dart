@@ -19,4 +19,11 @@ abstract class NotificationServiceBase {
     required String channelName,
     required String channelDescription,
   });
+
+  /// Item ids of reminders the user taps while the app is running.
+  Stream<String> get tappedItemIds;
+
+  /// The item id of the reminder whose tap launched the app from closed,
+  /// if that's how it was started; null otherwise.
+  Future<String?> launchItemId();
 }

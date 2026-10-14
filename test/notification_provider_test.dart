@@ -136,6 +136,30 @@ void main() {
     expect(service.scheduled, isEmpty);
   });
 
+  test('a reminder tap while running becomes the pending item', () async {
+    await notifications.init();
+    expect(notifications.pendingItemId.value, isNull);
+
+    service.tap('item-42');
+    await Future<void>.delayed(Duration.zero);
+
+    expect(notifications.pendingItemId.value, 'item-42');
+  });
+
+  test('launching the app from a reminder sets the pending item', () async {
+    final launched = NotificationProvider(
+      itemProvider: items,
+      settingsProvider: settings,
+      notificationService: FakeNotificationService(launchedFrom: 'item-7'),
+      clock: () => now,
+    );
+    addTearDown(launched.dispose);
+
+    await launched.init();
+
+    expect(launched.pendingItemId.value, 'item-7');
+  });
+
   test('a failing init leaves the app working and schedules nothing', () async {
     final failing = _FailingInitService();
     final provider = NotificationProvider(
