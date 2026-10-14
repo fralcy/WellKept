@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:well_kept/core/models/scheduled_reminder.dart';
+import 'package:well_kept/core/utils/backup_file_service.dart';
 import 'package:well_kept/core/utils/notification_service_base.dart';
 import 'package:well_kept/core/utils/photo_picker_service.dart';
 
@@ -73,3 +74,23 @@ class FakePhotoPicker extends PhotoPickerService {
 final Uint8List onePixelPng = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
 );
+
+/// Records saves and returns [pickResult] from pick, instead of opening
+/// the platform file dialogs.
+class FakeBackupFiles extends BackupFileService {
+  FakeBackupFiles({this.pickResult});
+
+  Uint8List? pickResult;
+  String? savedName;
+  Uint8List? savedBytes;
+
+  @override
+  Future<bool> save(String fileName, Uint8List bytes) async {
+    savedName = fileName;
+    savedBytes = bytes;
+    return true;
+  }
+
+  @override
+  Future<Uint8List?> pick() async => pickResult;
+}

@@ -1,15 +1,20 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:well_kept/core/models/backup_data.dart';
 import 'package:well_kept/core/providers/settings_provider.dart';
 import 'package:well_kept/core/providers/tracked_item_provider.dart';
+import 'package:well_kept/core/utils/backup_service.dart';
 import 'package:well_kept/core/utils/data_manager.dart';
 import 'package:well_kept/core/utils/photo_picker_service.dart';
 import 'package:well_kept/core/widgets/item_photo.dart';
 import 'package:well_kept/main.dart';
+import 'package:well_kept/models/app_settings.dart';
 import 'package:well_kept/models/tracked_item.dart';
 import 'package:well_kept/screens/responsive_item_list_screen.dart';
 
@@ -20,9 +25,11 @@ import 'fakes.dart';
 Widget _app({
   FakePhotoPicker? picker,
   FakeNotificationService? notifications,
+  FakeBackupFiles? backupFiles,
 }) => WellKeptApp(
   photoPicker: picker ?? FakePhotoPicker(),
   notificationService: notifications ?? FakeNotificationService(),
+  backupFiles: backupFiles ?? FakeBackupFiles(),
 );
 
 TrackedItemProvider _itemProvider(WidgetTester tester) => tester
@@ -710,6 +717,103 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Ghi bảo trì: Máy giặt'), findsOneWidget);
+  });
+
+  group('backup', () {
+    Future<void> openSettings(WidgetTester tester) async {
+      await tester.tap(find.byIcon(Icons.settings_outlined));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('exporting saves a backup containing the items', (
+      WidgetTester tester,
+    ) async {
+      await _resetData(tester);
+      await _usePhoneSize(tester);
+      final files = FakeBackupFiles();
+      await tester.pumpWidget(_app(backupFiles: files));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => _itemProvider(tester).addItem(name: 'Máy lọc nước'),
+      );
+      await tester.pumpAndSettle();
+
+      await openSettings(tester);
+      await tester.ensureVisible(find.text('Xuất file sao lưu'));
+      await _tapWithIO(tester, find.text('Xuất file sao lưu'));
+
+      expect(
+        files.savedName,
+        matches(RegExp(r'^wellkept-backup-\d{8}-\d{4}\.zip$')),
+      );
+      final data = const BackupService().decode(files.savedBytes!);
+      expect(data.items.single.name, 'Máy lọc nước');
+      expect(find.text('Đã lưu file sao lưu.'), findsOneWidget);
+    });
+
+    testWidgets('restoring with "merge" adds the backup items', (
+      WidgetTester tester,
+    ) async {
+      await _resetData(tester);
+      await _usePhoneSize(tester);
+      final files = FakeBackupFiles(
+        pickResult: const BackupService().encode(
+          BackupData(
+            items: [TrackedItem(id: 'old', name: 'Từ máy cũ')],
+            logs: const [],
+            settings: AppSettings.initial(),
+            photos: const {},
+          ),
+        ),
+      );
+      await tester.pumpWidget(_app(backupFiles: files));
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => _itemProvider(tester).addItem(name: 'Đang có'),
+      );
+      await tester.pumpAndSettle();
+
+      await openSettings(tester);
+      await tester.ensureVisible(find.text('Khôi phục từ file'));
+      await tester.tap(find.text('Khôi phục từ file'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Khôi phục dữ liệu'), findsOneWidget);
+      expect(
+        find.textContaining('File có 1 món đồ và 0 lần bảo trì.'),
+        findsOneWidget,
+      );
+      await _tapWithIO(tester, find.widgetWithText(TextButton, 'Gộp'));
+
+      expect(find.text('Đã khôi phục 1 món đồ.'), findsOneWidget);
+      expect(
+        _itemProvider(tester).items.map((i) => i.name),
+        unorderedEquals(['Đang có', 'Từ máy cũ']),
+      );
+    });
+
+    testWidgets('a file that is not a backup is rejected with a message', (
+      WidgetTester tester,
+    ) async {
+      await _resetData(tester);
+      await _usePhoneSize(tester);
+      final files = FakeBackupFiles(
+        pickResult: Uint8List.fromList(utf8.encode('not a zip')),
+      );
+      await tester.pumpWidget(_app(backupFiles: files));
+      await tester.pumpAndSettle();
+
+      await openSettings(tester);
+      await tester.ensureVisible(find.text('Khôi phục từ file'));
+      await tester.tap(find.text('Khôi phục từ file'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('File này không phải bản sao lưu WellKept.'),
+        findsOneWidget,
+      );
+      expect(find.text('Khôi phục dữ liệu'), findsNothing);
+    });
   });
 
   testWidgets('on a desktop-sized screen the add-item form opens as a dialog', (

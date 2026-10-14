@@ -5,6 +5,7 @@ import 'core/l10n/app_localizations.dart';
 import 'core/providers/notification_provider.dart';
 import 'core/providers/settings_provider.dart';
 import 'core/providers/tracked_item_provider.dart';
+import 'core/utils/backup_file_service.dart';
 import 'core/utils/data_manager.dart';
 import 'core/utils/notification_service_base.dart';
 import 'core/utils/photo_picker_service.dart';
@@ -29,17 +30,20 @@ class WellKeptApp extends StatelessWidget {
     super.key,
     this.notificationService,
     this.photoPicker = const PhotoPickerService(),
+    this.backupFiles = const BackupFileService(),
   });
 
   /// Overridable for tests; defaults to the platform implementation.
   final NotificationServiceBase? notificationService;
   final PhotoPickerService photoPicker;
+  final BackupFileService backupFiles;
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
         Provider<PhotoPickerService>.value(value: photoPicker),
+        Provider<BackupFileService>.value(value: backupFiles),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => TrackedItemProvider()),
         ChangeNotifierProvider(

@@ -120,6 +120,27 @@
   "reminderTimeHelper": "Thông báo nhắc mốc theo ngày và hạn bảo hành được gửi vào giờ này.",
   "remindersWebNote": "Bản web không gửi được thông báo khi đã đóng trang — hãy dùng app trên điện thoại để nhận nhắc nhở.",
 
+  "backupSection": "Sao lưu dữ liệu",
+  "backupHelper": "Lưu toàn bộ món đồ, lịch sử bảo trì và ảnh ra một file .zip — dùng để chuyển sang máy khác hoặc phòng khi mất máy.",
+  "exportBackup": "Xuất file sao lưu",
+  "importBackup": "Khôi phục từ file",
+  "exportDone": "Đã lưu file sao lưu.",
+  "backupFailed": "Không sao lưu/khôi phục được: {error}",
+  "@backupFailed": { "placeholders": { "error": { "type": "String" } } },
+  "restoreTitle": "Khôi phục dữ liệu",
+  "restoreSummary": "File có {items} món đồ và {logs} lần bảo trì.",
+  "@restoreSummary": {
+    "placeholders": { "items": { "type": "int" }, "logs": { "type": "int" } }
+  },
+  "restoreReplaceWarning": "\"Thay thế\" sẽ xóa toàn bộ dữ liệu hiện có trên máy này. \"Gộp\" giữ dữ liệu hiện có và thêm/cập nhật từ file.",
+  "restoreMerge": "Gộp",
+  "restoreReplace": "Thay thế",
+  "restoreDone": "Đã khôi phục {items} món đồ.",
+  "@restoreDone": { "placeholders": { "items": { "type": "int" } } },
+  "backupNotABackup": "File này không phải bản sao lưu WellKept.",
+  "backupNewerVersion": "Bản sao lưu được tạo bởi phiên bản WellKept mới hơn — hãy cập nhật app rồi thử lại.",
+  "backupCorrupt": "File sao lưu bị hỏng, không đọc được.",
+
   "notificationChannelName": "Nhắc mốc bảo trì",
   "notificationChannelDescription": "Nhắc khi món đồ sắp tới hạn bảo trì hoặc hết bảo hành",
   "notifDueInDays": "Còn {days} ngày tới hạn bảo trì ({date})",
