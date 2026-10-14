@@ -3,8 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../core/l10n/app_localizations.dart';
 import '../core/models/due_status.dart';
+import '../core/providers/notification_provider.dart';
 import '../core/providers/settings_provider.dart';
 import '../core/providers/tracked_item_provider.dart';
+import '../core/utils/item_filter.dart';
 import '../core/utils/item_labels.dart';
 import '../core/widgets/item_photo.dart';
 import '../core/widgets/neumorphic_container.dart';
@@ -17,8 +19,45 @@ import 'responsive_screen.dart';
 
 /// The app's only route: every tracked item, most urgent first. Adding an
 /// item or a log happens in modals, never by pushing a new route.
-class ResponsiveItemListScreen extends StatelessWidget {
+class ResponsiveItemListScreen extends StatefulWidget {
   const ResponsiveItemListScreen({super.key});
+
+  @override
+  State<ResponsiveItemListScreen> createState() =>
+      _ResponsiveItemListScreenState();
+}
+
+class _ResponsiveItemListScreenState extends State<ResponsiveItemListScreen> {
+  late final ValueNotifier<String?> _pendingItemId;
+
+  @override
+  void initState() {
+    super.initState();
+    _pendingItemId = context.read<NotificationProvider>().pendingItemId
+      ..addListener(_openPendingItem);
+    // A reminder tap that launched the app may already be waiting.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingItem());
+  }
+
+  @override
+  void dispose() {
+    _pendingItemId.removeListener(_openPendingItem);
+    super.dispose();
+  }
+
+  /// Opens the item a tapped reminder points at. An item deleted since the
+  /// reminder was scheduled is skipped silently.
+  void _openPendingItem() {
+    final itemId = _pendingItemId.value;
+    if (itemId == null || !mounted) return;
+    _pendingItemId.value = null;
+    final item = context
+        .read<TrackedItemProvider>()
+        .items
+        .where((i) => i.id == itemId)
+        .firstOrNull;
+    if (item != null) showAddLogModal(context, item);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,36 +96,150 @@ class ResponsiveItemListScreen extends StatelessWidget {
   }
 }
 
-class _ItemList extends StatelessWidget {
+class _ItemList extends StatefulWidget {
   const _ItemList();
+
+  @override
+  State<_ItemList> createState() => _ItemListState();
+}
+
+class _ItemListState extends State<_ItemList> {
+  final _searchController = TextEditingController();
+
+  /// Session-only on purpose — a filter silently persisting across
+  /// launches would make items look missing.
+  ItemFilter _filter = const ItemFilter();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() => _filter = const ItemFilter());
+  }
+
+  void _toggleCategory(ItemCategory c) {
+    final categories = Set.of(_filter.categories);
+    if (!categories.remove(c)) categories.add(c);
+    setState(() => _filter = _filter.copyWith(categories: categories));
+  }
 
   @override
   Widget build(BuildContext context) {
     final t = context.watch<SettingsProvider>().themeConfig;
     final l10n = AppLocalizations.of(context)!;
     final provider = context.watch<TrackedItemProvider>();
-    final items = provider.itemsByUrgency();
+    final allItems = provider.itemsByUrgency();
 
-    if (items.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Text(
-            l10n.emptyList,
-            textAlign: TextAlign.center,
-            style: TextStyle(color: t.textSecondary),
+    Widget message(String text) => Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Text(
+          text,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: t.textSecondary),
+        ),
+      ),
+    );
+
+    if (allItems.isEmpty) return message(l10n.emptyList);
+
+    final statuses = {
+      for (final item in allItems) item.id: provider.statusFor(item),
+    };
+    final items = allItems
+        .where((item) => _filter.matches(item, statuses[item.id]!))
+        .toList();
+
+    return CustomScrollView(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          sliver: SliverToBoxAdapter(child: _filterBar(l10n)),
+        ),
+        if (items.isEmpty)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                message(l10n.noMatches),
+                TextButton(
+                  onPressed: _clearFilters,
+                  child: Text(l10n.clearFilters),
+                ),
+              ],
+            ),
+          )
+        else
+          SliverPadding(
+            // Bottom padding keeps the last card clear of the FAB.
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+            sliver: SliverList.separated(
+              itemCount: items.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 14),
+              itemBuilder: (context, i) =>
+                  _ItemCard(item: items[i], status: statuses[items[i].id]!),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _filterBar(AppLocalizations l10n) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: l10n.searchHint,
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _filter.query.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: l10n.clearFilters,
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() => _filter = _filter.copyWith(query: ''));
+                    },
+                  ),
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: (q) =>
+              setState(() => _filter = _filter.copyWith(query: q)),
+        ),
+        const SizedBox(height: 8),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              FilterChip(
+                avatar: const Icon(Icons.priority_high, size: 18),
+                label: Text(l10n.filterAttention),
+                selected: _filter.attentionOnly,
+                onSelected: (v) => setState(
+                  () => _filter = _filter.copyWith(attentionOnly: v),
+                ),
+              ),
+              for (final c in ItemCategory.values) ...[
+                const SizedBox(width: 8),
+                FilterChip(
+                  avatar: Icon(categoryIcon(c), size: 18),
+                  label: Text(categoryLabel(l10n, c)),
+                  selected: _filter.categories.contains(c),
+                  onSelected: (_) => _toggleCategory(c),
+                ),
+              ],
+            ],
           ),
         ),
-      );
-    }
-
-    return ListView.separated(
-      // Bottom padding keeps the last card clear of the FAB.
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
-      itemCount: items.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 14),
-      itemBuilder: (context, i) =>
-          _ItemCard(item: items[i], status: provider.statusFor(items[i])),
+      ],
     );
   }
 }
