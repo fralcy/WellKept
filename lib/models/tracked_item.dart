@@ -109,6 +109,13 @@ class TrackedItem extends HiveObject {
   @HiveField(16)
   double? baselineValue;
 
+  /// `byValue`: the last reading entered by hand (when adding the item,
+  /// editing it, or via "update reading") as opposed to one raised by a
+  /// log. Lets [currentValue] be recomputed correctly when a log that had
+  /// raised it is edited or deleted.
+  @HiveField(17)
+  double? manualValue;
+
   TrackedItem({
     required this.id,
     required this.name,
@@ -127,6 +134,7 @@ class TrackedItem extends HiveObject {
     DateTime? updatedAt,
     this.valueUpdatedAt,
     this.baselineValue,
+    this.manualValue,
   }) : createdAt = createdAt ?? DateTime.now(),
        updatedAt = updatedAt ?? DateTime.now();
 
@@ -167,6 +175,7 @@ class TrackedItem extends HiveObject {
       // The reading entered when adding an item is the one at its last
       // maintenance, so it doubles as the baseline unless told otherwise.
       baselineValue: baselineValue ?? currentValue,
+      manualValue: currentValue,
     );
   }
 
@@ -188,6 +197,7 @@ class TrackedItem extends HiveObject {
     String? valueUnit,
     DateTime? Function()? valueUpdatedAt,
     double? Function()? baselineValue,
+    double? Function()? manualValue,
   }) {
     return TrackedItem(
       id: id,
@@ -215,6 +225,7 @@ class TrackedItem extends HiveObject {
       baselineValue: baselineValue != null
           ? baselineValue()
           : this.baselineValue,
+      manualValue: manualValue != null ? manualValue() : this.manualValue,
     );
   }
 }

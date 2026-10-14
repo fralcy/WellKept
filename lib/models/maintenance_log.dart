@@ -26,6 +26,10 @@ class MaintenanceLog extends HiveObject {
   @HiveField(5)
   DateTime createdAt;
 
+  /// Key into DataManager's photo lazy box (e.g. the shop's receipt).
+  @HiveField(6)
+  String? photoId;
+
   MaintenanceLog({
     required this.id,
     required this.itemId,
@@ -33,6 +37,7 @@ class MaintenanceLog extends HiveObject {
     this.value,
     this.note = '',
     DateTime? createdAt,
+    this.photoId,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory MaintenanceLog.create({
@@ -52,12 +57,13 @@ class MaintenanceLog extends HiveObject {
     );
   }
 
-  /// [value] takes a getter so it can be cleared — see
+  /// Nullable fields take a getter so they can be cleared — see
   /// `TrackedItem.copyWith`.
   MaintenanceLog copyWith({
     DateTime? date,
     double? Function()? value,
     String? note,
+    String? Function()? photoId,
   }) {
     return MaintenanceLog(
       id: id,
@@ -66,6 +72,7 @@ class MaintenanceLog extends HiveObject {
       value: value != null ? value() : this.value,
       note: note ?? this.note,
       createdAt: createdAt,
+      photoId: photoId != null ? photoId() : this.photoId,
     );
   }
 }

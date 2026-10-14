@@ -105,6 +105,8 @@ class DataManager {
 
   List<MaintenanceLog> getAllLogs() => _logsBox.values.toList();
 
+  MaintenanceLog? getLog(String id) => _logsBox.get(id);
+
   List<MaintenanceLog> getLogsForItem(String itemId) =>
       _logsBox.values.where((l) => l.itemId == itemId).toList();
 

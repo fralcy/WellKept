@@ -238,6 +238,117 @@ void main() {
     },
   );
 
+  group('editing and deleting logs', () {
+    test('updateLog saves the changes', () async {
+      final item = await addBike();
+      final log = await provider.addLog(
+        itemId: item.id,
+        date: DateTime(2026, 9, 1),
+        value: 15500,
+        note: 'cũ',
+      );
+
+      await provider.updateLog(
+        log.copyWith(date: DateTime(2026, 9, 2), note: 'mới'),
+      );
+
+      final saved = provider.logsFor(item.id).single;
+      expect(saved.id, log.id);
+      expect(saved.date, DateTime(2026, 9, 2));
+      expect(saved.note, 'mới');
+      expect(saved.value, 15500);
+    });
+
+    test('lowering a log reading that had raised the current reading '
+        'brings it back down', () async {
+      final item = await addBike(currentValue: 15000);
+      final log = await provider.addLog(
+        itemId: item.id,
+        date: DateTime(2026, 9, 1),
+        value: 51000, // typo for 15100
+      );
+      expect(provider.items.single.currentValue, 51000);
+
+      await provider.updateLog(log.copyWith(value: () => 15100));
+
+      expect(provider.items.single.currentValue, 15100);
+    });
+
+    test('deleting the log that set the reading falls back to the highest '
+        'remaining reading', () async {
+      final item = await addBike(currentValue: 15000);
+      await provider.addLog(
+        itemId: item.id,
+        date: DateTime(2026, 8, 1),
+        value: 15800,
+      );
+      final latest = await provider.addLog(
+        itemId: item.id,
+        date: DateTime(2026, 9, 1),
+        value: 16900,
+      );
+
+      await provider.deleteLog(latest.id);
+
+      expect(provider.items.single.currentValue, 15800);
+    });
+
+    test('a reading entered by hand survives deleting a higher log', () async {
+      final item = await addBike(currentValue: 15000);
+      await provider.updateReading(item.id, 16200);
+      final log = await provider.addLog(
+        itemId: item.id,
+        date: DateTime(2026, 9, 1),
+        value: 17000,
+      );
+      expect(provider.items.single.currentValue, 17000);
+
+      await provider.deleteLog(log.id);
+
+      expect(provider.items.single.currentValue, 16200);
+    });
+
+    test('setLogPhoto stores, replaces and removes the log photo', () async {
+      final item = await addBike();
+      final log = await provider.addLog(itemId: item.id, date: DateTime(2026));
+
+      await provider.setLogPhoto(log.id, Uint8List.fromList([7]));
+      final firstId = provider.logsFor(item.id).single.photoId!;
+      expect(await provider.loadPhoto(firstId), [7]);
+
+      await provider.setLogPhoto(log.id, Uint8List.fromList([8]));
+      final secondId = provider.logsFor(item.id).single.photoId!;
+      expect(await provider.loadPhoto(secondId), [8]);
+      expect(await provider.loadPhoto(firstId), isNull);
+
+      await provider.setLogPhoto(log.id, null);
+      expect(provider.logsFor(item.id).single.photoId, isNull);
+      expect(await provider.loadPhoto(secondId), isNull);
+    });
+
+    test('deleteLog deletes the log photo', () async {
+      final item = await addBike();
+      final log = await provider.addLog(itemId: item.id, date: DateTime(2026));
+      await provider.setLogPhoto(log.id, Uint8List.fromList([1]));
+      final photoId = provider.logsFor(item.id).single.photoId!;
+
+      await provider.deleteLog(log.id);
+
+      expect(await provider.loadPhoto(photoId), isNull);
+    });
+
+    test('deleteItem deletes its log photos as well', () async {
+      final item = await addBike();
+      final log = await provider.addLog(itemId: item.id, date: DateTime(2026));
+      await provider.setLogPhoto(log.id, Uint8List.fromList([1]));
+      final photoId = provider.logsFor(item.id).single.photoId!;
+
+      await provider.deleteItem(item.id);
+
+      expect(await provider.loadPhoto(photoId), isNull);
+    });
+  });
+
   group('setItemPhoto', () {
     test('stores the bytes and points the item at them', () async {
       final item = await addBike();

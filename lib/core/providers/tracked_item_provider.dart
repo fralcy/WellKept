@@ -123,11 +123,16 @@ class TrackedItemProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Deletes the item together with its logs and photo.
+  /// Deletes the item together with its logs and every photo of either.
   Future<void> deleteItem(String id) async {
-    final photoId = _dataManager.getItem(id)?.photoId;
+    final photoIds = [
+      _dataManager.getItem(id)?.photoId,
+      for (final log in _dataManager.getLogsForItem(id)) log.photoId,
+    ].nonNulls;
     await _dataManager.deleteLogsForItem(id);
-    if (photoId != null) await _dataManager.deletePhotoBytes(photoId);
+    for (final photoId in photoIds) {
+      await _photoStorage.delete(photoId);
+    }
     await _dataManager.deleteItem(id);
     _reload();
     notifyListeners();
@@ -172,6 +177,7 @@ class TrackedItemProvider extends ChangeNotifier {
     await _dataManager.saveItem(
       item.copyWith(
         currentValue: () => value,
+        manualValue: () => value,
         valueUpdatedAt: () => DateTime.now(),
       ),
     );
@@ -179,9 +185,56 @@ class TrackedItemProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> deleteLog(String id) async {
-    await _dataManager.deleteLog(id);
+  /// Saves an edited log (date, reading, note — not its photo, see
+  /// [setLogPhoto]) and recomputes the item's current reading, which the
+  /// old version of the log may have raised.
+  Future<void> updateLog(MaintenanceLog updated) async {
+    await _dataManager.saveLog(updated);
+    await _recomputeReading(updated.itemId);
     _reload();
     notifyListeners();
+  }
+
+  /// Replaces the log's photo with [bytes] (or removes it when null) —
+  /// same lifecycle as [setItemPhoto].
+  Future<void> setLogPhoto(String logId, Uint8List? bytes) async {
+    final log = _dataManager.getLog(logId);
+    if (log == null) return;
+    final oldPhotoId = log.photoId;
+    final newPhotoId = bytes == null ? null : await _photoStorage.save(bytes);
+    await _dataManager.saveLog(log.copyWith(photoId: () => newPhotoId));
+    if (oldPhotoId != null) await _photoStorage.delete(oldPhotoId);
+    _reload();
+    notifyListeners();
+  }
+
+  Future<void> deleteLog(String id) async {
+    final log = _dataManager.getLog(id);
+    await _dataManager.deleteLog(id);
+    if (log != null) {
+      if (log.photoId != null) await _photoStorage.delete(log.photoId!);
+      await _recomputeReading(log.itemId);
+    }
+    _reload();
+    notifyListeners();
+  }
+
+  /// Current reading = the highest of the last hand-entered reading and
+  /// every log's reading. Run after a log is edited or deleted, so a
+  /// reading that only came from that log doesn't linger.
+  Future<void> _recomputeReading(String itemId) async {
+    final item = _dataManager.getItem(itemId);
+    if (item == null) return;
+    final readings = [
+      item.manualValue ?? item.baselineValue,
+      for (final log in _dataManager.getLogsForItem(itemId)) log.value,
+    ].nonNulls;
+    if (readings.isEmpty) return;
+    final recomputed = readings.reduce((a, b) => a > b ? a : b);
+    if (recomputed != item.currentValue) {
+      await _dataManager.saveItem(
+        item.copyWith(currentValue: () => recomputed),
+      );
+    }
   }
 }

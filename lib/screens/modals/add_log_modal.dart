@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -5,33 +6,42 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/tracked_item_provider.dart';
 import '../../core/utils/item_labels.dart';
+import '../../core/widgets/item_photo.dart';
 import '../../core/widgets/neumorphic_button.dart';
+import '../../core/widgets/photo_picker_field.dart';
+import '../../models/maintenance_log.dart';
 import '../../models/tracked_item.dart';
 import 'adaptive_modal.dart';
 
 /// Records a maintenance log for [item], and lists its past logs below the
-/// form (newest first).
+/// form (newest first). Tapping a past log loads it into the same form to
+/// edit it, rather than stacking a second modal.
 Future<void> showAddLogModal(BuildContext context, TrackedItem item) {
-  return showAdaptiveModal(context, child: _AddLogForm(itemId: item.id));
+  return showAdaptiveModal(context, child: _LogSheet(itemId: item.id));
 }
 
-class _AddLogForm extends StatefulWidget {
-  const _AddLogForm({required this.itemId});
+class _LogSheet extends StatefulWidget {
+  const _LogSheet({required this.itemId});
 
   /// Looked up live from the provider, so the header/history reflect a
   /// log saved from this very sheet.
   final String itemId;
 
   @override
-  State<_AddLogForm> createState() => _AddLogFormState();
+  State<_LogSheet> createState() => _LogSheetState();
 }
 
-class _AddLogFormState extends State<_AddLogForm> {
+class _LogSheetState extends State<_LogSheet> {
   final _formKey = GlobalKey<FormState>();
   final _valueController = TextEditingController();
   final _noteController = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
+  Uint8List? _photoBytes;
+  bool _photoChanged = false;
+
+  /// The log being edited, or null when adding a new one.
+  MaintenanceLog? _editing;
 
   @override
   void dispose() {
@@ -40,17 +50,59 @@ class _AddLogFormState extends State<_AddLogForm> {
     super.dispose();
   }
 
+  void _startEditing(MaintenanceLog log) {
+    setState(() {
+      _editing = log;
+      _date = log.date;
+      _valueController.text = log.value == null ? '' : _formatInput(log.value!);
+      _noteController.text = log.note;
+      _photoBytes = null;
+      _photoChanged = false;
+    });
+  }
+
+  void _resetToAdding() {
+    setState(() {
+      _editing = null;
+      _date = DateTime.now();
+      _valueController.clear();
+      _noteController.clear();
+      _photoBytes = null;
+      _photoChanged = false;
+    });
+  }
+
   Future<void> _save(AppLocalizations l10n) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
+    final provider = context.read<TrackedItemProvider>();
+    final value = _parseDouble(_valueController.text);
+    final note = _noteController.text.trim();
     try {
-      await context.read<TrackedItemProvider>().addLog(
-        itemId: widget.itemId,
-        date: _date,
-        value: _parseDouble(_valueController.text),
-        note: _noteController.text.trim(),
-      );
-      if (mounted) Navigator.of(context).pop();
+      final editing = _editing;
+      final String logId;
+      if (editing == null) {
+        final log = await provider.addLog(
+          itemId: widget.itemId,
+          date: _date,
+          value: value,
+          note: note,
+        );
+        logId = log.id;
+      } else {
+        await provider.updateLog(
+          editing.copyWith(date: _date, value: () => value, note: note),
+        );
+        logId = editing.id;
+      }
+      if (_photoChanged) await provider.setLogPhoto(logId, _photoBytes);
+      if (!mounted) return;
+      if (editing == null) {
+        Navigator.of(context).pop();
+      } else {
+        setState(() => _saving = false);
+        _resetToAdding();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -71,6 +123,7 @@ class _AddLogFormState extends State<_AddLogForm> {
     final status = provider.statusFor(item);
     final logs = provider.logsFor(item.id);
     final tracksValue = item.recurrenceType == RecurrenceType.byValue;
+    final editing = _editing;
 
     return Form(
       key: _formKey,
@@ -79,7 +132,9 @@ class _AddLogFormState extends State<_AddLogForm> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            l10n.logTitle(item.name),
+            editing == null
+                ? l10n.logTitle(item.name)
+                : l10n.editLogTitle(formatDate(l10n, editing.date)),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -135,14 +190,39 @@ class _AddLogFormState extends State<_AddLogForm> {
             minLines: 1,
             maxLines: 3,
           ),
+          const SizedBox(height: 12),
+          PhotoPickerField(
+            // Keyed by the log being edited, so switching logs drops the
+            // previous one's preview.
+            key: ValueKey(editing?.id),
+            storedPhotoId: editing?.photoId,
+            changed: _photoChanged,
+            pickedBytes: _photoBytes,
+            onChanged: (bytes) => setState(() {
+              _photoBytes = bytes;
+              _photoChanged = true;
+            }),
+          ),
           const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: NeumorphicButton(
-              onTap: () => _save(l10n),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              child: Text(l10n.save),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (editing != null) ...[
+                TextButton(
+                  onPressed: _resetToAdding,
+                  child: Text(l10n.cancelEdit),
+                ),
+                const SizedBox(width: 8),
+              ],
+              NeumorphicButton(
+                onTap: () => _save(l10n),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                child: Text(l10n.save),
+              ),
+            ],
           ),
           if (logs.isNotEmpty) ...[
             const SizedBox(height: 20),
@@ -157,6 +237,16 @@ class _AddLogFormState extends State<_AddLogForm> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 dense: true,
+                selected: log.id == editing?.id,
+                onTap: () => _startEditing(log),
+                leading: log.photoId == null
+                    ? null
+                    : ItemPhoto(
+                        photoId: log.photoId!,
+                        size: 40,
+                        borderRadius: 8,
+                        placeholder: const Icon(Icons.image_outlined),
+                      ),
                 title: Text(
                   [
                     formatDate(l10n, log.date),
@@ -168,7 +258,10 @@ class _AddLogFormState extends State<_AddLogForm> {
                 trailing: IconButton(
                   tooltip: l10n.deleteLog,
                   icon: const Icon(Icons.delete_outline),
-                  onPressed: () => provider.deleteLog(log.id),
+                  onPressed: () {
+                    if (log.id == editing?.id) _resetToAdding();
+                    provider.deleteLog(log.id);
+                  },
                 ),
               ),
           ],
@@ -181,3 +274,6 @@ class _AddLogFormState extends State<_AddLogForm> {
 /// Accepts both "1500.5" and "1500,5".
 double? _parseDouble(String? v) =>
     double.tryParse((v ?? '').trim().replaceAll(',', '.'));
+
+/// Prefill text for a numeric field: "15000", not "15000.0".
+String _formatInput(double v) => v == v.roundToDouble() ? '${v.toInt()}' : '$v';

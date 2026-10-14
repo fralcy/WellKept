@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,8 +6,7 @@ import '../../core/l10n/app_localizations.dart';
 import '../../core/providers/settings_provider.dart';
 import '../../core/providers/tracked_item_provider.dart';
 import '../../core/utils/item_labels.dart';
-import '../../core/utils/photo_picker_service.dart';
-import '../../core/widgets/item_photo.dart';
+import '../../core/widgets/photo_picker_field.dart';
 import '../../core/widgets/neumorphic_button.dart';
 import '../../models/tracked_item.dart';
 import 'adaptive_modal.dart';
@@ -103,27 +101,6 @@ class _ItemFormState extends State<_ItemForm> {
     );
   }
 
-  Future<void> _pickPhoto(AppLocalizations l10n, PhotoSource source) async {
-    try {
-      final bytes = await context.read<PhotoPickerService>().pick(source);
-      if (bytes == null || !mounted) return;
-      setState(() {
-        _photoBytes = bytes;
-        _photoChanged = true;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.photoFailed('$e'))));
-    }
-  }
-
-  void _removePhoto() => setState(() {
-    _photoBytes = null;
-    _photoChanged = true;
-  });
-
   Future<void> _save(AppLocalizations l10n) async {
     if (_saving || !_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
@@ -184,6 +161,7 @@ class _ItemFormState extends State<_ItemForm> {
             valueUpdatedAt: readingChanged && currentValue != null
                 ? () => DateTime.now()
                 : null,
+            manualValue: readingChanged ? () => currentValue : null,
             // Editing "current reading" never moves the baseline; one is
             // only seeded when the item becomes value-based for the first
             // time, and dropped when it stops being value-based.
@@ -227,7 +205,15 @@ class _ItemFormState extends State<_ItemForm> {
             ),
           ),
           const SizedBox(height: 12),
-          _photoSection(l10n),
+          PhotoPickerField(
+            storedPhotoId: widget.item?.photoId,
+            changed: _photoChanged,
+            pickedBytes: _photoBytes,
+            onChanged: (bytes) => setState(() {
+              _photoBytes = bytes;
+              _photoChanged = true;
+            }),
+          ),
           const SizedBox(height: 12),
           TextFormField(
             controller: _nameController,
@@ -309,81 +295,6 @@ class _ItemFormState extends State<_ItemForm> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _photoSection(AppLocalizations l10n) {
-    final t = context.watch<SettingsProvider>().themeConfig;
-    const size = 72.0;
-    final placeholder = Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: t.darkShadow),
-      ),
-      child: Icon(Icons.image_outlined, color: t.textSecondary),
-    );
-    final storedPhotoId = widget.item?.photoId;
-
-    final Widget preview;
-    final bool hasPhoto;
-    if (_photoChanged) {
-      hasPhoto = _photoBytes != null;
-      preview = hasPhoto
-          ? ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                _photoBytes!,
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-              ),
-            )
-          : placeholder;
-    } else {
-      hasPhoto = storedPhotoId != null;
-      preview = hasPhoto
-          ? ItemPhoto(
-              photoId: storedPhotoId,
-              size: size,
-              placeholder: placeholder,
-            )
-          : placeholder;
-    }
-
-    return Row(
-      children: [
-        preview,
-        const SizedBox(width: 12),
-        Expanded(
-          child: Wrap(
-            spacing: 4,
-            runSpacing: 4,
-            children: [
-              // A browser can't be asked for the camera directly; its file
-              // dialog already offers the camera where the device has one.
-              if (!kIsWeb)
-                TextButton.icon(
-                  onPressed: () => _pickPhoto(l10n, PhotoSource.camera),
-                  icon: const Icon(Icons.photo_camera_outlined),
-                  label: Text(l10n.takePhoto),
-                ),
-              TextButton.icon(
-                onPressed: () => _pickPhoto(l10n, PhotoSource.gallery),
-                icon: const Icon(Icons.photo_library_outlined),
-                label: Text(kIsWeb ? l10n.addPhoto : l10n.pickPhoto),
-              ),
-              if (hasPhoto)
-                TextButton.icon(
-                  onPressed: _removePhoto,
-                  icon: const Icon(Icons.delete_outline),
-                  label: Text(l10n.removePhoto),
-                ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 
